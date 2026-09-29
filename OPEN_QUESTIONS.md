@@ -82,3 +82,33 @@ chosen, and why. None of these change the database schema or a Decision-log item
     changed; there is no success toast (the spec defines none).
 26. **Demo data.** `scripts/demo.ps1` adds a searchable text custom field "Material" and 52 parts; it needs
     first-run setup to be done because every row has an owner.
+
+## M3 — Import
+
+27. **Header normalization edge underscores.** After "non-alphanumerics → `_`, collapse repeats", leading and
+    trailing `_` are dropped, so "Part No." matches the synonym `part_no`.
+28. **Blank and duplicate headers.** A blank header cell becomes "Column {n}"; a repeated header gets
+    " (2)", " (3)"… so every column can be mapped.
+29. **Choosing a sheet.** Added `PUT /imports/{id}/sheet {sheet_name}` (not in the endpoint table). The "Which
+    sheet?" list shows each non-empty sheet with its data-row count (rows below the header).
+30. **Part name on existing parts.** "Part name is missing." applies to new parts only — for a matched part an
+    empty cell never clears (10.4). Over-long names use "Part name is longer than 200 characters."
+    (10.3 lists only the missing case).
+31. **Inactive parts that reappear in a file.** Proposed as an update `status: inactive → active`, accepted by
+    default. Archived parts follow 10.4: "Restore archived part", not accepted.
+32. **Part-number spelling on re-import.** Matching is on the normalized number; an existing part keeps its
+    stored spelling.
+33. **Audit granularity for imports.** One `import.commit` row per commit with the counts, not one row per part.
+34. **Counts after commit.** The batch's new/updated/missing counts are overwritten with what was actually
+    committed; the Done screen shows those. "Import {n} parts": n = accepted new + updated rows.
+35. **Concurrent change before commit.** If a "new" row's part number was created in the meantime, the whole
+    commit is refused with `STALE_WRITE` and nothing is written.
+36. **"Fix" editor.** A dialog titled "Row {n}" with an input per mapped field, Cancel / Save. Fixing a
+    duplicate re-checks every row that shared the number.
+37. **Back from Match columns / Review.** Back from Match columns returns to the upload hero; the unused batch
+    simply expires. Back from Review reopens Match columns (re-mapping re-validates the file).
+38. **Discard import.** Acts immediately; the spec defines no confirmation.
+39. **"+ New custom field…".** Opens the Add field dialog pre-filled with the column's header; the new field is
+    then selected for that column.
+40. **Where the work runs.** Parsing and validation run as background tasks inside the API process; progress is
+    stored on `import_batch`. The 24-hour expiry job also deletes the stored upload.

@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, Outlet } from "react-router";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SetupPage } from "../features/auth/SetupPage";
+import { ImportPage } from "../features/import/ImportPage";
 import { PartsPage } from "../features/parts/PartsPage";
 import { PrintLabelsPage } from "../features/print/PrintLabelsPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
           {
             element: <AdminOnly />,
             children: [
+              { path: "/parts/import", element: <ImportPage /> },
               { path: "/settings", element: <Navigate to="/settings/general" replace /> },
               { path: "/settings/:tab", element: <SettingsPage /> },
             ],

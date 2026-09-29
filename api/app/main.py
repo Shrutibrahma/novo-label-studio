@@ -18,6 +18,8 @@ from app.db import dispose_engine, init_engine
 from app.errors import install_handlers
 from app.logging_setup import RequestLogMiddleware, configure_logging
 from app.models import PrintAgent
+from app.imports.router import router as imports_router
+from app.imports.service import expire_batches
 from app.parts.aliases import router as aliases_router
 from app.parts.custom_fields import router as custom_fields_router
 from app.parts.router import router as parts_router
@@ -69,8 +71,9 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.add_middleware(RequestLogMiddleware)
     install_handlers(app)
     for r in (health_router, setup_router, auth_router, users_router, settings_router, sizes_router,
-              printers_router, jobs_router, custom_fields_router, parts_router, aliases_router):
+              printers_router, jobs_router, custom_fields_router, parts_router, aliases_router, imports_router):
         app.include_router(r, prefix=API_PREFIX)
+    scheduler.register(expire_batches)
     return app
 
 

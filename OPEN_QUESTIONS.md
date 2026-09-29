@@ -112,3 +112,43 @@ chosen, and why. None of these change the database schema or a Decision-log item
     then selected for that column.
 40. **Where the work runs.** Parsing and validation run as background tasks inside the API process; progress is
     stored on `import_batch`. The 24-hour expiry job also deletes the stored upload.
+
+## M4 — Render + Configure
+
+41. **Tall preset and `qr_top`.** Tall (4 × 6 in) renders at 812 × 1218 dots, exactly H = 1.5 × W, so the rule
+    "H ≤ 1.5 × W → qr_side" gives it the side layout; `qr_top` only appears on custom sizes that are taller
+    and narrower (e.g. 2 × 4 in). The golden set therefore covers qr_top with a 2 × 4 in size.
+42. **PNG bytes across platforms.** Pillow's Windows and Linux wheels bundle different deflate libraries, so
+    identical pixels gave different PNG bytes (and sha256). Label PNGs are written by our own 1-bit PNG
+    writer using Python's `zlib` (level 9); goldens now match byte-for-byte on Windows and in the container.
+43. **Shrink first, then wrap.** 7.5 is applied in order: a line first shrinks in 0.5 pt steps to its minimum;
+    only if it is still too wide does a main/second line wrap onto two lines (choosing the break that makes
+    the longer line shortest, at the largest size where both lines fit). The height pass then shrinks all
+    lines together and re-checks each line's wrap.
+44. **Print-time fields need a display name.** Each `manual_fields` entry carries a `label` (the dialog's "Name")
+    used in the Print dialog and in messages like "Enter {Field} to print."; the key is derived from it.
+    At most one Box sequence field per label.
+45. **UPPERCASE and captions.** UPPERCASE applies to the value only; captions print exactly as typed.
+46. **Role for a newly added field.** Main line if there is none, else Detail (up to 6), else Second line; when
+    all roles are full, "+ Add field" items are disabled with "Limit reached".
+47. **Turning serial numbers off while QR = Serial.** QR code switches to None.
+48. **Required print-time fields in the editor.** The preview part has no print-time values, so
+    `REQUIRED_VALUE_MISSING` doesn't count against "Fits" / "Publish" in the Configure editor (it still blocks
+    printing).
+49. **Config validation messages not in 14.2.** `CONFIG_INVALID` "This label configuration isn't valid. Reload and
+    try again." (malformed spec, bad noun, duplicate keys) and `CONFIG_FIELD_UNKNOWN` "A field on this label no
+    longer exists. Remove it and publish again." (e.g. a deleted custom field or a non-printable one).
+50. **Extra endpoints.** `GET /configs` (list page data: default + current overrides) and `GET /configs/{id}`.
+    Config responses include `next_version` so the editor can show "Publish version {n+1}"; per-part versions
+    keep counting after "Use default label" (the next override continues the same config key).
+51. **Retiring an override is audited** as `config.publish` with `after = {"retired": true}` (no separate action
+    name exists).
+52. **Optimistic check for publishing.** `POST /configs` accepts `base_config_id` (the version the editor loaded);
+    if another version was published meanwhile the publish fails with `STALE_WRITE` (label_config has no
+    `updated_at` for If-Match).
+53. **Small static previews.** The Configure card (280 px) and the part drawer show the label scaled *down* to fit
+    — at 1× a Large label (812 px) wouldn't fit. The Print and Configure preview panes follow 7.7 exactly
+    (integer multiples, minimum 1×, scroll if needed).
+54. **Editor layout.** Each field row has two lines (name + remove; role / caption / UPPERCASE) so the 440 px
+    panel stays readable. Reordering: drag the grip, or Alt+↑ / Alt+↓ on it.
+55. **After publishing** the editor returns to the Configure list.

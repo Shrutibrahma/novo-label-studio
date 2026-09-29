@@ -25,6 +25,19 @@
   font-display: swap;
   src: url("/fonts/Inter-Bold.woff2") format("woff2");
 }
+/* Label fonts, only used to show each option of the Configure "Font" select in its own face (12.11). */
+@font-face {
+  font-family: "Roboto Condensed";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/RobotoCondensed-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/AtkinsonHyperlegible-Regular.ttf") format("truetype");
+}
 @font-face {
   font-family: "JetBrains Mono";
   font-weight: 500;

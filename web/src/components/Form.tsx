@@ -83,7 +83,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
 
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: string | null;
-  options: { value: string; label: string; disabled?: boolean }[];
+  options: { value: string; label: string; disabled?: boolean; style?: React.CSSProperties }[];
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select({ error, options, className = "", ...rest }, ref) {
@@ -91,7 +91,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
     <div className={`relative ${className}`}>
       <select ref={ref} className={`${CONTROL} h-9 appearance-none pr-9 ${borderFor(error)}`} {...rest}>
         {options.map((o) => (
-          <option key={o.value} value={o.value} disabled={o.disabled}>
+          <option key={o.value} value={o.value} disabled={o.disabled} style={o.style}>
             {o.label}
           </option>
         ))}

@@ -1,7 +1,9 @@
 import { createBrowserRouter, Navigate, Outlet } from "react-router";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SetupPage } from "../features/auth/SetupPage";
+import { PartsPage } from "../features/parts/PartsPage";
 import { PrintLabelsPage } from "../features/print/PrintLabelsPage";
+import { SettingsPage } from "../features/settings/SettingsPage";
 import { RequireAuth, SessionWatcher } from "./auth";
 import { Shell } from "./Shell";
 
@@ -11,6 +13,14 @@ function Root() {
       <SessionWatcher />
       <Outlet />
     </>
+  );
+}
+
+function AdminOnly() {
+  return (
+    <RequireAuth role="admin">
+      <Outlet />
+    </RequireAuth>
   );
 }
 
@@ -29,6 +39,14 @@ export const router = createBrowserRouter([
         children: [
           { path: "/", element: <Navigate to="/print" replace /> },
           { path: "/print", element: <PrintLabelsPage /> },
+          { path: "/parts", element: <PartsPage /> },
+          {
+            element: <AdminOnly />,
+            children: [
+              { path: "/settings", element: <Navigate to="/settings/general" replace /> },
+              { path: "/settings/:tab", element: <SettingsPage /> },
+            ],
+          },
           { path: "*", element: <Navigate to="/print" replace /> },
         ],
       },

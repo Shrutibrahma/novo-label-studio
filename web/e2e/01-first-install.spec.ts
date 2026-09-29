@@ -35,7 +35,8 @@ test("first install: setup wizard, sign-in errors, roles", async ({ page }) => {
   const printers = await (await page.request.get("/api/v1/printers")).json();
   saveState({ agentToken: token, printerId: printers[0].id });
   await page.getByRole("button", { name: "Finish" }).click();
-  await expect(page).toHaveURL(/\/(parts|print)$/);
+  await expect(page).toHaveURL(/\/parts$/);
+  await expect(page.getByText("Your parts list is empty")).toBeVisible();
 
   // Shell: brand, company name, admin navigation, tab title.
   await expect(page.getByText("Novo Label Studio").first()).toBeVisible();

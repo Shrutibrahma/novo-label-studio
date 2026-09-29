@@ -94,7 +94,7 @@ class CustomFieldDef(Base):
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     label: Mapped[str] = mapped_column(Text)
     data_type: Mapped[str] = mapped_column(Text)
-    choices: Mapped[list[str] | None] = mapped_column(JSONB)
+    choices: Mapped[list[str] | None] = mapped_column(JSONB(none_as_null=True))
     required: Mapped[bool] = mapped_column(Boolean, server_default=DB_DEFAULT)
     searchable: Mapped[bool] = mapped_column(Boolean, server_default=DB_DEFAULT)
     printable: Mapped[bool] = mapped_column(Boolean, server_default=DB_DEFAULT)
@@ -162,8 +162,8 @@ class ImportRow(Base):
     action: Mapped[str] = mapped_column(Text)
     part_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("part.id"))
     data: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    diff: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    errors: Mapped[list[dict[str, str]] | None] = mapped_column(JSONB)
+    diff: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    errors: Mapped[list[dict[str, str]] | None] = mapped_column(JSONB(none_as_null=True))
     accepted: Mapped[bool] = mapped_column(Boolean, server_default=DB_DEFAULT)
 
 
@@ -331,6 +331,6 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(Text)
     entity: Mapped[str] = mapped_column(Text)
     entity_id: Mapped[str] = mapped_column(Text)
-    before: Mapped[Any] = mapped_column(JSONB)
-    after: Mapped[Any] = mapped_column(JSONB)
+    before: Mapped[Any] = mapped_column(JSONB(none_as_null=True))
+    after: Mapped[Any] = mapped_column(JSONB(none_as_null=True))
     at: Mapped[datetime] = _ts()

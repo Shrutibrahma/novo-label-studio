@@ -59,6 +59,11 @@ ERRORS: dict[str, tuple[int, str]] = {
     "LAST_ADMIN": (409, "There must be at least one active admin."),
     "INTERNAL": (500, "Something went wrong. Try again; if it keeps happening, contact your admin. (ref {request_id})"),
     # Not in 14.2; see OPEN_QUESTIONS.md for each.
+    "FIELD_NOT_DATE": (422, "{Field} must be a date."),
+    "FIELD_KEY_TAKEN": (409, "A field with this key already exists."),
+    "FIELD_KEY_INVALID": (422, "Key can use lowercase letters, numbers and underscores, starting with a letter."),
+    "IMAGE_UNSUPPORTED": (415, "Upload a PNG, JPEG or WebP image."),
+    "IMAGE_TOO_LARGE": (413, "This image is too large. Limit: 10 MB."),
     "PART_NUMBER_IS_ALIAS": (409, "This part number is already used as a label name for part {part_number}."),
     "USERNAME_TAKEN": (409, "This username is already taken."),
     "USERNAME_INVALID": (422, "Username can use 3–64 letters, numbers, dots, dashes and underscores."),

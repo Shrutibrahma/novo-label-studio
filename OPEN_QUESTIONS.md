@@ -47,3 +47,38 @@ chosen, and why. None of these change the database schema or a Decision-log item
     /login and returns to the same page after sign-in.
 13. **`If-Match` precision.** Compared to `updated_at` within 0.5 ms. Why: JSON timestamps carry microseconds;
     allows for float round-trips in clients.
+
+## M2 — Parts
+
+14. **Part images: missing endpoint and messages.** Added `GET /parts/{id}/image` (the table only lists PUT and
+    DELETE, but thumbnails must be served). Errors: `IMAGE_UNSUPPORTED` "Upload a PNG, JPEG or WebP image.",
+    `IMAGE_TOO_LARGE` "This image is too large. Limit: 10 MB.". Identical images share one asset row (sha256
+    unique). The spec has no "remove image" control, so the UI only offers "Change image".
+15. **Manual-entry limits.** The import limits of 10.3 also apply to manual entry (part number 64, part name 200,
+    description 1000, revision 16); custom text values ≤ 1000. Manual entry uses the 14.2 wording
+    ("{Field} is required.", "{Field} is longer than {max} characters."); imports keep 10.3's.
+    Date values need a code: `FIELD_NOT_DATE` "{Field} must be a date." (text from 10.3).
+16. **Part number equal to another part's label name (manual entry).** Rejected with `PART_NUMBER_IS_ALIAS` and
+    10.4's text "This part number is already used as a label name for part {part_number}.".
+17. **What "searchable" does for a custom field.** Searchable fields are matched by `GET /parts?q=` as exact
+    (score 1.0) or prefix (0.9) matches on the value, merged with `search_parts()` results. `search_parts()`
+    itself is unchanged. Why: the flag exists in schema.sql but its behaviour isn't specified.
+18. **Search on the Parts screen with Inactive/Archived/All.** `search_parts()` returns active parts only, so
+    for those filters the same scoring runs without the active-only condition.
+19. **Custom field keys.** Auto-derived from the name (editable until created, fixed after). Reserved keys
+    (`part_number`, `part_name`, `description`, `revision`, `label_name`, `serial`, `print_date`, …) are
+    rejected with `FIELD_KEY_TAKEN` "A field with this key already exists."; malformed keys with
+    `FIELD_KEY_INVALID`. A choice field has 1–100 choices.
+20. **Restoring an archived part.** `POST /parts/{id}/restore` exists but 12.8 only names "Archive part"; the
+    drawer shows "Restore" (ArchiveRestore icon, 11.5) in that place for archived parts.
+21. **Empty filter results.** A filter chip with no matching parts (and no search text) shows the table header
+    with no rows; the spec defines only "No parts yet" and "No parts match "{q}"".
+22. **After "Add part".** The dialog closes and the list refreshes; the new part's drawer does not open.
+23. **Row menus.** Triggered by ChevronDown ("Menu chevron", 11.5); the icon table has no "more" icon.
+    Users: inactive users get "Activate" in place of "Deactivate".
+24. **List error state.** Every list shows a danger banner with the API message (or "Can't reach the server.
+    Printing is paused.") — the spec requires an error state but doesn't define it.
+25. **Settings forms.** Each Settings form saves with a "Save" button that is enabled only when something
+    changed; there is no success toast (the spec defines none).
+26. **Demo data.** `scripts/demo.ps1` adds a searchable text custom field "Material" and 52 parts; it needs
+    first-run setup to be done because every row has an owner.

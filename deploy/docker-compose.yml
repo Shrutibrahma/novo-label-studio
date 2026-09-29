@@ -1,0 +1,55 @@
+# Novo Label Studio — db, api, web (spec section 4). Start with scripts/up.ps1.
+name: labelstudio
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: label
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?run scripts/up.ps1 to create deploy/.env}
+      POSTGRES_DB: label
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U label -d label"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://label:${DB_PASSWORD}@db:5432/label
+      ASSET_DIR: /data/assets
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://localhost:8443}
+    volumes:
+      - assets:/data/assets
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    environment:
+      HTTPS_PORT_HINT: ${HTTPS_PORT:-8443}
+      EXTRA_SAN: ${EXTRA_SAN:-}
+    ports:
+      - "${HTTPS_PORT:-8443}:443"
+      - "${HTTP_PORT:-8088}:80"
+    volumes:
+      - ./certs:/etc/nginx/certs
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  assets:

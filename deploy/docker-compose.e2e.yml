@@ -1,0 +1,19 @@
+# Override for the Playwright stack: throwaway database, separate ports. Used by scripts/test.ps1 as
+# project "labelstudio-e2e", so it never touches the development data.
+services:
+  db:
+    volumes: !reset []
+    tmpfs:
+      - /var/lib/postgresql/data
+  api:
+    volumes: !reset []
+    tmpfs:
+      - /data/assets:uid=10001
+    environment:
+      PUBLIC_BASE_URL: https://localhost:9443
+  web:
+    environment:
+      HTTPS_PORT_HINT: "9443"
+    ports: !override
+      - "9443:443"
+      - "9088:80"

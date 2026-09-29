@@ -1,0 +1,4 @@
+# M0 spike only. The real api/ and agent/ lock dependencies with uv.lock (spec section 0, rule 6).
+pillow
+segno
+pywin32

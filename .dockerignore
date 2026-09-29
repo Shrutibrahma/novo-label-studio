@@ -1,0 +1,14 @@
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+web/dist
+web/test-results
+web/playwright-report
+agent
+agent-output
+spike
+backups
+deploy/certs
+deploy/.env
+.git

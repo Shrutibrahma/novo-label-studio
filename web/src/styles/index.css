@@ -1,0 +1,176 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@font-face {
+  font-family: "Inter";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Inter-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/Inter-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/Inter-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/Inter-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-Medium.woff2") format("woff2");
+}
+
+@theme inline {
+  /* Only the spec's tokens exist as colours; Tailwind's default palette is removed. */
+  --color-*: initial;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+  --color-nav-bg: var(--nav-bg);
+  --color-nav-item-hover: var(--nav-item-hover);
+  --color-nav-item-active: var(--nav-item-active);
+  --color-nav-text: var(--nav-text);
+  --color-nav-text-active: var(--nav-text-active);
+  --color-nav-divider: var(--nav-divider);
+  --color-hero-bg-from: var(--hero-bg-from);
+  --color-hero-bg-to: var(--hero-bg-to);
+  --color-hero-text: var(--hero-text);
+  --color-hero-text-muted: var(--hero-text-muted);
+  --color-hero-drop-border: var(--hero-drop-border);
+  --color-hero-drop-bg: var(--hero-drop-bg);
+  --color-hero-drop-bg-hover: var(--hero-drop-bg-hover);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-pressed: var(--primary-pressed);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-primary-disabled: var(--primary-disabled);
+  --color-focus-ring: var(--focus-ring);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-hover: var(--danger-hover);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-neutral-text: var(--neutral-text);
+  --color-neutral-bg: var(--neutral-bg);
+  --color-hover-fill: var(--hover-fill);
+  --color-row-hover: var(--row-hover);
+  --color-skeleton: var(--skeleton);
+  --color-preview-surround: var(--preview-surround);
+  --color-preview-edge: var(--preview-edge);
+  --color-label-paper: var(--label-paper);
+  --color-label-ink: var(--label-ink);
+  --color-white: var(--nav-text-active);
+
+  --shadow-dropdown: var(--shadow-dropdown);
+  --shadow-dialog: var(--shadow-dialog);
+
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-dialog: 12px;
+  --radius-drop: 16px;
+
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
+
+@layer components {
+  /* Typography scale, section 11.2: size / line-height / weight. */
+  .t-display { font-size: 32px; line-height: 40px; font-weight: 700; }
+  .t-h1 { font-size: 24px; line-height: 32px; font-weight: 600; }
+  .t-h2 { font-size: 20px; line-height: 28px; font-weight: 600; }
+  .t-h3 { font-size: 16px; line-height: 24px; font-weight: 600; }
+  .t-body { font-size: 14px; line-height: 20px; font-weight: 400; }
+  .t-body-strong { font-size: 14px; line-height: 20px; font-weight: 600; }
+  .t-small { font-size: 13px; line-height: 18px; font-weight: 400; }
+  .t-caption { font-size: 12px; line-height: 16px; font-weight: 500; }
+  .t-button { font-size: 14px; line-height: 20px; font-weight: 600; }
+  .t-mono { font-family: var(--font-mono); font-weight: 500; }
+
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: spin 0.8s linear infinite;
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--skeleton) 0%, var(--surface-subtle) 50%, var(--skeleton) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s ease-in-out infinite;
+    border-radius: 6px;
+  }
+  .pixelated {
+    image-rendering: pixelated;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}

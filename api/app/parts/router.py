@@ -156,7 +156,7 @@ LEFT JOIN label_size ls ON ls.id = coalesce(pc.label_size_id, dc.label_size_id)
 """
 
 # search_parts() only returns active parts. For the Parts screen's Inactive/Archived/All filters the same
-# scoring runs without the status restriction.
+# scoring (migration 0002: word similarity for names, capped at 0.85) runs without the status restriction.
 _SEARCH_ANY_STATUS = """
 SELECT part_id, max(s) AS score FROM (
   SELECT p.id AS part_id,
@@ -173,9 +173,9 @@ SELECT part_id, max(s) AS score FROM (
     FROM part_alias a
    WHERE a.alias_norm % normalize_alias(:q) OR a.alias_norm LIKE like_prefix(normalize_alias(:q))
   UNION ALL
-  SELECT p.id, similarity(lower(p.part_name || ' ' || coalesce(p.description, '')), normalize_alias(:q))::real
+  SELECT p.id, least(word_similarity(normalize_alias(:q), lower(p.part_name || ' ' || coalesce(p.description, ''))), 0.85)::real
     FROM part p
-   WHERE lower(p.part_name || ' ' || coalesce(p.description, '')) % normalize_alias(:q)
+   WHERE normalize_alias(:q) <> '' AND normalize_alias(:q) <% lower(p.part_name || ' ' || coalesce(p.description, ''))
 ) h GROUP BY part_id
 """
 

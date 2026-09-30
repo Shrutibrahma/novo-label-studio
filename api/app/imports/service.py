@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -11,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from anyio import to_thread
-from sqlalchemy import delete, func, insert, select, text, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.sessions import now_utc
@@ -198,9 +200,25 @@ def raw_rows(sheet: Sheet, mapping: dict[str, str | None]) -> list[tuple[int, di
     return [(n, {t: cells[i] for t, i in index.items()}) for n, cells in sheet.rows]
 
 
-def row_values(batch_id: uuid.UUID, r: RowResult) -> dict[str, Any]:
-    return {"batch_id": batch_id, "source_row": r.source_row, "action": r.action, "part_id": r.part_id,
-            "data": r.data, "diff": r.diff, "errors": r.errors, "accepted": r.accepted}
+def _json(value: Any) -> str | None:
+    return None if value is None else json.dumps(value)
+
+
+async def copy_records(db: AsyncSession, table: str, columns: list[str], records: list[tuple[Any, ...]]) -> None:
+    """Bulk write with COPY on the session's own connection (same transaction). jsonb values are JSON strings.
+    A batched INSERT costs a network round trip per row through Docker Desktop; COPY streams them."""
+    if not records:
+        return
+    conn = await db.connection()
+    raw = await conn.get_raw_connection()
+    await raw.driver_connection.copy_records_to_table(table, records=records, columns=columns)  # type: ignore[union-attr]
+
+
+IMPORT_ROW_COLUMNS = ["batch_id", "source_row", "action", "part_id", "data", "diff", "errors", "accepted"]
+
+
+def row_record(batch_id: uuid.UUID, r: RowResult) -> tuple[Any, ...]:
+    return (batch_id, r.source_row, r.action, r.part_id, json.dumps(r.data), _json(r.diff), _json(r.errors), r.accepted)
 
 
 async def recount(db: AsyncSession, batch_id: uuid.UUID) -> None:
@@ -213,11 +231,13 @@ async def recount(db: AsyncSession, batch_id: uuid.UUID) -> None:
 
 
 async def validate(batch_id: uuid.UUID, mapping: dict[str, str | None]) -> None:
+    t0 = time.perf_counter()
     try:
         async with sessionmaker()() as db:
             batch = await db.get(ImportBatch, batch_id)
             assert batch is not None
             sheets = await to_thread.run_sync(_read_sheets, stored_path(batch), batch.file_name, batch.sheet_name)
+            log.info("import %s: read %d rows in %.1f s", batch_id, len(sheets[0].rows), time.perf_counter() - t0)
             sheet = sheets[0]
             targets = [t for t in mapping.values() if t]
             ctx = await load_context(db, targets)
@@ -235,15 +255,16 @@ async def validate(batch_id: uuid.UUID, mapping: dict[str, str | None]) -> None:
         results: list[RowResult] = await to_thread.run_sync(lambda: [classify(r, ctx, dups) for r in cleaned])
         seen = {r.number_norm for r in cleaned if r.number_norm}
         results += missing_rows(ctx, seen)
+        log.info("import %s: validated + diffed at %.1f s", batch_id, time.perf_counter() - t0)
 
         async with sessionmaker()() as db:
             await db.execute(delete(ImportRow).where(ImportRow.batch_id == batch_id))
-            for start in range(0, len(results), 2000):
-                await db.execute(insert(ImportRow), [row_values(batch_id, r) for r in results[start:start + 2000]])
+            await copy_records(db, "import_row", IMPORT_ROW_COLUMNS, [row_record(batch_id, r) for r in results])
             await recount(db, batch_id)
             await db.execute(update(ImportBatch).where(ImportBatch.id == batch_id)
                              .values(status="staged", progress_done=total))
             await db.commit()
+        log.info("import %s: staged %d rows at %.1f s", batch_id, len(results), time.perf_counter() - t0)
     except ParseError as err:
         await _set(batch_id, status="failed", error=err.code)
     except Exception:

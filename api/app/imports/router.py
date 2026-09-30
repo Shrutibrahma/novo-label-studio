@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
+
+import asyncpg
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import bindparam, func, insert, select, update
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +29,9 @@ from app.models import ImportBatch, ImportMapping, ImportRow, Part
 from app.parts.values import normalize_part_number
 
 router = APIRouter(prefix="/imports", tags=["imports"])
+
+NEW_PART_COLUMNS = ["part_number", "part_name", "description", "revision", "custom_data", "status", "source",
+                    "last_import_batch_id", "created_by", "updated_by"]
 
 Action = Literal["new", "update", "unchanged", "invalid", "missing"]
 
@@ -360,22 +365,25 @@ async def commit_import(batch_id: uuid.UUID, user: Admin, db: DB) -> CommitOut:
                             "b_rev": r.data.get("revision", cur.get("revision")), "b_custom": custom,
                             "b_status": "active" if r.diff and "status" in r.diff else existing.status})
     try:
-        if new_rows:
-            for start in range(0, len(new_rows), 2000):
-                await db.execute(insert(Part), new_rows[start:start + 2000])
+        # COPY instead of row-by-row INSERT/UPDATE: a 50,000-row commit stays a few seconds (row triggers still fire).
+        await service.copy_records(db, "part", NEW_PART_COLUMNS, [
+            (r["part_number"], r["part_name"], r["description"], r["revision"], json.dumps(r["custom_data"]), "active",
+             "import", batch.id, user.id, user.id) for r in new_rows])
         if updates:
-            stmt = (update(Part).where(Part.id == bindparam("b_id"))
-                    .values(part_name=bindparam("b_name"), description=bindparam("b_desc"),
-                            revision=bindparam("b_rev"), custom_data=bindparam("b_custom", type_=JSONB),
-                            status=bindparam("b_status"), source="import", last_import_batch_id=batch.id,
-                            updated_by=user.id))
-            conn = await db.connection()
-            for start in range(0, len(updates), 2000):
-                await conn.execute(stmt, updates[start:start + 2000])
+            await db.execute(text("CREATE TEMP TABLE import_update (id uuid PRIMARY KEY, part_name text, "
+                                  "description text, revision text, custom_data jsonb, status text) ON COMMIT DROP"))
+            await service.copy_records(db, "import_update", ["id", "part_name", "description", "revision", "custom_data",
+                                                              "status"],
+                                       [(u["b_id"], u["b_name"], u["b_desc"], u["b_rev"], json.dumps(u["b_custom"]),
+                                         u["b_status"]) for u in updates])
+            await db.execute(text(
+                "UPDATE part p SET part_name = u.part_name, description = u.description, revision = u.revision, "
+                "custom_data = u.custom_data, status = u.status, source = 'import', last_import_batch_id = :b, "
+                "updated_by = :u FROM import_update u WHERE p.id = u.id"), {"b": batch.id, "u": user.id})
         if missing:
             await db.execute(update(Part).where(Part.id.in_(missing), Part.status == "active")
                              .values(status="inactive", updated_by=user.id))
-    except (IntegrityError, DBAPIError) as exc:
+    except (IntegrityError, DBAPIError, asyncpg.PostgresError) as exc:  # COPY raises asyncpg's own errors
         await db.rollback()
         raise ApiError("STALE_WRITE") from exc
 

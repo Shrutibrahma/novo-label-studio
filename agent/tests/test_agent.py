@@ -88,6 +88,19 @@ def test_simulated_control_endpoint(tmp_path: Path) -> None:
         sim.close()
 
 
+def test_control_port_is_exclusive(tmp_path: Path) -> None:
+    """A second agent must not silently share the control port (SO_REUSEADDR on Windows would allow it)."""
+    first = SimulatedPrinter(tmp_path)
+    first.serve_control(0)
+    assert first._server is not None
+    port = first._server.server_address[1]
+    try:
+        with pytest.raises(OSError):
+            SimulatedPrinter(tmp_path / "b").serve_control(port)
+    finally:
+        first.close()
+
+
 class FakeApi:
     def __init__(self, jobs: list[Job]) -> None:
         self.jobs = jobs

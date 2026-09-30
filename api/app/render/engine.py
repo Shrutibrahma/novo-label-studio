@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from functools import lru_cache
 from typing import Any
 
 import segno
@@ -134,19 +135,48 @@ def _fonts(line: Line, pt: float, dpi: int) -> tuple[ImageFont.FreeTypeFont, Ima
     return load_font(line.family, line.weight, size), load_font(line.family, 400, size)
 
 
-def _text_width(font: ImageFont.FreeTypeFont, text: str) -> int:
+@lru_cache(maxsize=16384)
+def _advance(family: str, weight: int, size: float, text: str) -> int:
+    """Advance width (cheap: no rasterization)."""
+    return int(round(load_font(family, weight, size).getlength(text))) if text else 0
+
+
+@lru_cache(maxsize=16384)
+def _exact(family: str, weight: int, size: float, text: str) -> int:
+    """Visible width: the larger of the advance and the ink's right edge (rasterizes glyphs, so it's slower)."""
     if not text:
         return 0
-    right = font.getbbox(text, anchor="la")[2]
-    return max(int(round(font.getlength(text))), int(right))
+    right = load_font(family, weight, size).getbbox(text, anchor="la")[2]
+    return max(_advance(family, weight, size, text), int(right))
+
+
+# Ink never extends more than this fraction of the em past the advance width (true for the bundled fonts),
+# so a line whose advance is that far inside the column fits without measuring its ink.
+OVERHANG_EM = 0.25
+
+
+def _caption_width(line: Line, size: float) -> int:
+    return _advance(line.family, 400, size, line.caption + " ") if line.caption else 0
 
 
 def _visual_width(line: Line, text: str, pt: float, dpi: int, with_caption: bool) -> int:
-    value_font, caption_font = _fonts(line, pt, dpi)
-    width = _text_width(value_font, text)
-    if with_caption and line.caption:
-        width += int(round(caption_font.getlength(line.caption + " ")))
+    size = _dots(pt, dpi)
+    width = _exact(line.family, line.weight, size, text)
+    if with_caption:
+        width += _caption_width(line, size)
     return width
+
+
+def _fits(line: Line, text: str, pt: float, dpi: int, with_caption: bool, col_w: int) -> bool:
+    """Same answer as _visual_width(...) <= col_w, measuring the ink only when it can matter."""
+    size = _dots(pt, dpi)
+    extra = _caption_width(line, size) if with_caption else 0
+    adv = _advance(line.family, line.weight, size, text) + extra
+    if adv > col_w:
+        return False  # visible width >= advance
+    if adv + OVERHANG_EM * size <= col_w:
+        return True
+    return _exact(line.family, line.weight, size, text) + extra <= col_w
 
 
 def _line_height(line: Line, pt: float, dpi: int) -> int:
@@ -178,12 +208,14 @@ def _splits(text: str) -> list[tuple[str, str]]:
 
 def _layout_at(line: Line, pt: float, col_w: int, dpi: int) -> list[str] | None:
     """The visual lines for `line` at `pt`, or None if it can't fit the column at this size."""
-    if _visual_width(line, line.text, pt, dpi, True) <= col_w:
+    if _fits(line, line.text, pt, dpi, True, col_w):
         return [line.text]
     if line.role == "detail":
         return None  # detail lines never wrap
     best: tuple[int, list[str]] | None = None
     for first, second in _splits(line.text):
+        if not (_fits(line, first, pt, dpi, True, col_w) and _fits(line, second, pt, dpi, False, col_w)):
+            continue
         w1 = _visual_width(line, first, pt, dpi, True)
         w2 = _visual_width(line, second, pt, dpi, False)
         if w1 <= col_w and w2 <= col_w:
@@ -198,7 +230,7 @@ def _fit_width(line: Line, col_w: int, dpi: int) -> None:
     (primary/secondary only). Never truncates."""
     pt = line.start_pt
     while pt >= line.min_pt:
-        if _visual_width(line, line.text, pt, dpi, True) <= col_w:
+        if _fits(line, line.text, pt, dpi, True, col_w):
             line.pt, line.parts = pt, [line.text]
             return
         pt -= STEP_PT

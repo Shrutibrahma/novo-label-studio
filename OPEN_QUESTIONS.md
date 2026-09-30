@@ -196,3 +196,42 @@ chosen, and why. None of these change the database schema or a Decision-log item
     `labelstudio-agent sim-status <status>` and `zpl2png <file.zpl>`.
 74. **Service install.** `agent/packaging/build.ps1` (PyInstaller) and `install-service.ps1` (NSSM) are provided
     but not run here: installing a Windows service is left to you on the printer laptop.
+
+## M6 — History + hardening
+
+75. **`search_parts()` performance — approved schema change.** At 50,000 parts the `schema.sql` function took
+    85–700 ms (p95 ≈ 540 ms), missing the 150 ms target, and whole-string similarity missed one-word searches in
+    long names ("bearing" found nothing in "Bearing 100008 Description…"). With your approval, **migration 0002**
+    replaces the function (same signature, columns and 1.0 / 0.9 / similarity ranking): literals inlined so
+    indexes are used, index-ordered top-k per branch (new btree `text_pattern_ops` and GiST trigram indexes),
+    and word similarity for part name + description, capped at 0.85 so it never outranks exact/prefix matches.
+    `schema.sql` is unchanged (0001 still applies it verbatim); searches now take ~30–70 ms at 50,000 parts.
+76. **History filters' "no filter" values.** The date-range select adds "All" (the default) before Today / 7 days /
+    30 days / Custom; the "Printed by" select's empty choice is labelled "Printed by".
+77. **"Printed by" list for operators.** `GET /users` is admin-only, so `GET /history/people` lists the people who
+    have printed (id + display name) for any role.
+78. **Label detail endpoints.** Added `GET /labels/{id}` (drawer data: snapshot fields with labels, job timeline,
+    reprints, serial) and `GET /labels/{id}/bitmap` (the exact stored PNG) — the drawer needs them.
+79. **Reprints.** A reprint of a reprint points at the original (`reprint_of` = the original label), so the
+    original's drawer lists every reprint. The optional note is stored in the print request body (print_job has
+    no note column). Reprints require an `Idempotency-Key` like prints. The reason dialog's button is "Print".
+    The printer-status rules of 14.1 apply; the size check does not (the label's size can't change).
+80. **Serial status words.** allocated → "Allocated" (neutral), printed → "Printed", unconfirmed → "Unconfirmed",
+    voided → "Voided" (11.1 mapping; "Allocated" isn't listed there).
+81. **Void reason message.** `VOID_REASON_SHORT` "Reason must be at least 5 characters."; voiding an already voided
+    serial returns `SERIAL_VOIDED`.
+82. **Exact serial in History search.** When the typed text is an issued serial, the drawer opens on that
+    serial's original print.
+83. **Bulk writes use COPY.** Staging a 50,000-row import and committing it write rows with PostgreSQL `COPY`
+    (updates via a temp table + one `UPDATE … FROM`) instead of batched INSERTs, which cost ~1.5 ms per row
+    through Docker Desktop; the 50,000-row check went from 247 s to 36 s. Row triggers still fire.
+84. **Renderer text measurement.** Widths are memoized and the ink box is only measured when the advance width is
+    within 0.25 em of the column edge (a test proves no bundled glyph overhangs more); output is byte-identical
+    (goldens unchanged) and a 4 × 6 in render went from ~440 ms to ~55 ms.
+85. **Plain part list at 50,000 parts.** `GET /parts` without a search computes label freshness through the
+    `part_label_freshness` view for the whole table (~0.5 s on this laptop). There's no target for it in
+    section 15; if it matters on the production machine, the next step is computing freshness only for the page.
+86. **Backups.** A `backup` service in Compose runs `deploy/backup.sh` nightly at `BACKUP_AT` (02:00,
+    `BACKUP_TZ` default UTC), writing `backups/label-<stamp>.dump` + `assets-<stamp>.tar.gz`, deleting files
+    older than 30 days. `scripts/backup-now.ps1` and `scripts/restore.ps1` were added (not in your script list)
+    so A12 can be run; restore was tested: wipe → restore gave identical label rows and bitmap hashes.

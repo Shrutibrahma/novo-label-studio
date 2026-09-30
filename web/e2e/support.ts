@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,7 +73,12 @@ export function startAgent(token: string): void {
     stdio: "ignore",
   });
   g[agentKey] = child;
-  process.on("exit", () => child.kill());
+  // On Windows child.kill() only stops the uv wrapper; take the whole tree down with it.
+  process.on("exit", () => {
+    if (child.pid === undefined) return;
+    if (process.platform === "win32") spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+    else child.kill();
+  });
 }
 
 /** Forces the simulated printer's status through the agent's local control endpoint. */

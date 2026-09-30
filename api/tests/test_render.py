@@ -237,6 +237,22 @@ def test_weights_and_centre_alignment() -> None:
     assert left.png != centre.png and centre.fits
 
 
+def test_overhang_bound_holds_for_bundled_fonts() -> None:
+    """The fast width check assumes ink never extends more than OVERHANG_EM past the advance width."""
+    from app.render.engine import OVERHANG_EM
+    from app.render.fonts import FAMILIES, load_font
+
+    chars = [chr(c) for c in range(0x21, 0x7F)] + list("×·–—°±µ")
+    for family, weights in FAMILIES.items():
+        for weight in weights:
+            for size in (20.0, 39.0, 79.0):
+                font = load_font(family, weight, size)
+                for ch in chars:
+                    text = "ab" + ch
+                    overhang = font.getbbox(text, anchor="la")[2] - font.getlength(text)
+                    assert overhang <= OVERHANG_EM * size, (family, weight, size, ch, overhang)
+
+
 @pytest.mark.skip(reason="needs hardware")
 def test_a1_preview_equals_print_on_all_presets() -> None:
     """A1: scan the printed label at 600 dpi, overlay it on the preview PNG: no element off by more than 2 dots."""

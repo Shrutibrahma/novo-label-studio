@@ -26,6 +26,13 @@ log = logging.getLogger("agent.simulated")
 FORCEABLE = ("ready", "offline", "out_of_media", "head_open", "paused", "error")
 
 
+class _ExclusiveServer(ThreadingHTTPServer):
+    """No SO_REUSEADDR: on Windows it would let a second agent bind the same control port silently."""
+
+    allow_reuse_address = False
+    daemon_threads = True
+
+
 class SimulatedPrinter:
     name = "Simulated ZQ630 Plus"
 
@@ -105,6 +112,6 @@ class SimulatedPrinter:
             def log_message(self, fmt: str, *args: object) -> None:
                 log.debug("control: " + fmt, *args)
 
-        self._server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        self._server = _ExclusiveServer(("127.0.0.1", port), Handler)
         threading.Thread(target=self._server.serve_forever, name="sim-control", daemon=True).start()
         log.info("simulated printer control on http://127.0.0.1:%d/status", port)

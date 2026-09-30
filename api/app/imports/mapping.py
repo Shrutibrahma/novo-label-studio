@@ -7,13 +7,16 @@ import re
 from collections.abc import Iterable
 
 CORE_TARGETS = ("part_number", "part_name", "description", "revision")
+# Pictures placed in cells (XLSX) become the part image.
+IMAGE_TARGET = "image"
 
 SYNONYMS: dict[str, tuple[str, ...]] = {
     "part_number": ("part_number", "part_no", "partno", "pn", "part", "item", "item_no", "item_number",
-                    "user_number", "user_no", "novo_pn"),
+                    "user_number", "user_no", "novo_pn", "p_n", "novo_p_n", "novo_part_number"),
     "part_name": ("part_name", "name", "item_name", "title", "short_description"),
     "description": ("description", "desc", "desc1", "long_description", "details"),
     "revision": ("revision", "rev", "rev_level", "revision_level"),
+    IMAGE_TARGET: ("image", "images", "picture", "pictures", "photo", "photos", "pic", "img", "part_image"),
 }
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")

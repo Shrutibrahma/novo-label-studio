@@ -16,7 +16,7 @@ CORE_FIELDS: dict[str, tuple[str, int]] = {
 }
 CUSTOM_TEXT_MAX = 1000
 RESERVED_KEYS = frozenset({"part_number", "part_name", "description", "revision", "label_name", "serial",
-                           "print_date", "status", "id", "custom_data", "manual"})
+                           "print_date", "status", "id", "custom_data", "manual", "image"})
 
 _EXCEL_EPOCH = date(1899, 12, 30)
 _MDY = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")

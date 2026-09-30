@@ -26,6 +26,7 @@ from app.configs.effective import effective_config
 from app.errors import ApiError
 from app.models import AppUser, Asset, LabelConfig, LabelSize, Part, PartAlias
 from app.parts.custom_fields import all_fields, as_def
+from app.parts.images import MAX_IMAGE_BYTES, store_png, to_png
 from app.parts.values import (
     FieldDef,
     ValueError_,
@@ -34,12 +35,9 @@ from app.parts.values import (
     normalize_part_number,
     parse_custom,
 )
-from app.render.canvas import sha256
 
 router = APIRouter(tags=["parts"])
 
-MAX_IMAGE_BYTES = 10 * 1024 * 1024
-MAX_IMAGE_EDGE = 1024
 IMAGE_TYPES = {"image/png": {".png"}, "image/jpeg": {".jpg", ".jpeg"}, "image/webp": {".webp"}}
 PIL_FORMATS = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}
 
@@ -522,13 +520,9 @@ def reencode_image(data: bytes, declared_type: str | None, filename: str | None)
             if PIL_FORMATS.get(img.format or "") is None or ext not in IMAGE_TYPES[PIL_FORMATS[img.format or ""]]:
                 raise ApiError("IMAGE_UNSUPPORTED")
             img.load()
-            converted = img.convert("RGBA") if img.mode not in ("RGB", "RGBA", "L", "LA") else img.copy()
+            return to_png(img)
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
         raise ApiError("IMAGE_UNSUPPORTED") from exc
-    converted.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE), Image.Resampling.LANCZOS)
-    buf = io.BytesIO()
-    converted.save(buf, format="PNG", optimize=True)
-    return buf.getvalue()
 
 
 @router.put("/parts/{part_id}/image", response_model=PartDetail)
@@ -536,18 +530,7 @@ async def upload_image(part_id: uuid.UUID, user: Admin, db: DB, file: Annotated[
     part = await get_part(db, part_id, lock=True)
     data = await file.read(MAX_IMAGE_BYTES + 1)
     png = reencode_image(data, file.content_type, file.filename)
-    digest = sha256(png)
-    asset = (await db.execute(select(Asset).where(Asset.sha256 == digest))).scalar_one_or_none()
-    if asset is None:
-        key = f"{digest.hex()[:2]}/{digest.hex()}.png"
-        path = asset_path(key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(png)
-        tmp.replace(path)
-        asset = Asset(sha256=digest, mime_type="image/png", byte_size=len(png), storage_key=key, created_by=user.id)
-        db.add(asset)
-        await db.flush()
+    asset = await store_png(db, png, user.id)
     before = part.image_asset_id
     part.image_asset_id = asset.id
     part.updated_by = user.id
@@ -578,6 +561,17 @@ async def read_image(part_id: uuid.UUID, _: AnyUser, db: DB) -> Response:
         raise ApiError("NOT_FOUND")
     path = asset_path(asset.storage_key)
     if not path.exists():
+        raise ApiError("NOT_FOUND")
+    return Response(path.read_bytes(), media_type=asset.mime_type,
+                    headers={"Cache-Control": "private, max-age=31536000, immutable", "ETag": asset.sha256.hex()})
+
+
+@router.get("/assets/{asset_id}")
+async def read_asset(asset_id: uuid.UUID, _: Admin, db: DB) -> Response:
+    """Stored image by id: the import review shows pictures staged from a spreadsheet before they're linked."""
+    asset = await db.get(Asset, asset_id)
+    path = asset_path(asset.storage_key) if asset else None
+    if asset is None or path is None or not path.exists():
         raise ApiError("NOT_FOUND")
     return Response(path.read_bytes(), media_type=asset.mime_type,
                     headers={"Cache-Control": "private, max-age=31536000, immutable", "ETag": asset.sha256.hex()})

@@ -15,6 +15,14 @@ import type { CommitResult, ImportBatch, ImportRow, RowAction } from "./types";
 
 type Filter = RowAction | null;
 
+const IMAGE = "image";
+
+/** A picture staged from the spreadsheet (asset id), as a small thumbnail. */
+function Thumb({ id, label }: { id: unknown; label: string }) {
+  if (typeof id !== "string") return <span className="text-text-muted">none</span>;
+  return <img src={`/api/v1/assets/${id}`} alt={label} className="inline-block h-8 w-8 rounded-[4px] border border-border bg-surface object-contain" />;
+}
+
 function show(v: unknown): string {
   return v === null || v === undefined || v === "" ? "—" : String(v);
 }
@@ -149,13 +157,22 @@ export function ReviewStep({ batch, onBack, onDiscarded, onCommitted, onChanged 
                 <Td>
                   <Mono className="text-text">{show(r.data.part_number)}</Mono>
                 </Td>
-                <Td className="text-text">{show(r.data.part_name)}</Td>
+                <Td className="text-text">
+                  <span className="inline-flex items-center gap-2">
+                    {r.action === "new" && typeof r.data[IMAGE] === "string" && <Thumb id={r.data[IMAGE]} label="Image" />}
+                    {show(r.data.part_name)}
+                  </span>
+                </Td>
                 <Td>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(r.diff ?? {}).map(([field, [oldV, newV]]) =>
                       field === "status" && oldV === "archived" ? (
                         <span key={field} className="rounded-[6px] bg-warning-bg px-2 py-0.5 t-caption text-warning">
                           Restore archived part
+                        </span>
+                      ) : field === IMAGE ? (
+                        <span key={field} className="inline-flex items-center gap-1.5 rounded-[6px] bg-neutral-bg px-2 py-0.5 t-caption text-text">
+                          image: <Thumb id={oldV} label="Current image" /> → <Thumb id={newV} label="New image" />
                         </span>
                       ) : (
                         <span key={field} className="rounded-[6px] bg-neutral-bg px-2 py-0.5 t-caption text-text">
@@ -201,11 +218,11 @@ export function ReviewStep({ batch, onBack, onDiscarded, onCommitted, onChanged 
   );
 }
 
-const CORE_LABEL: Record<string, string> = { part_number: "Part number", part_name: "Part name", description: "Description", revision: "Revision" };
+const CORE_LABEL: Record<string, string> = { part_number: "Part number", part_name: "Part name", description: "Description", revision: "Revision", image: "Image" };
 
 function FixDialog({ batch, row, onClose, onSaved }: { batch: ImportBatch; row: ImportRow | null; onClose: () => void; onSaved: () => void }) {
   const fields = useCustomFields();
-  const targets = [...new Set(Object.values(batch.mapping).filter(Boolean) as string[])];
+  const targets = [...new Set(Object.values(batch.mapping).filter(Boolean) as string[])].filter((t) => t !== IMAGE);
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

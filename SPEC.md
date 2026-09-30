@@ -35,7 +35,7 @@ It is parts-master-first: every label comes from a part record. Nobody draws a l
 - Saved column mappings, validation, import diff and review
 - User-defined label names (aliases) that resolve to one part and are searchable
 - Custom part fields
-- Part images (manual upload)
+- Part images (manual upload, or pictures placed in cells of an XLSX import)
 - Label configuration: global default + optional per-part override, versioned
 - Automatic layout; limited styling (font, weight, size emphasis, alignment, spacing)
 - Print-time manual fields: text, number, choice, box sequence (BOX 1/3)
@@ -76,7 +76,7 @@ These decisions are final for v1. Changing one requires editing this table first
 | D16 | Reprint reuses the original snapshot, serial and bitmap | Exact reproduction |
 | D17 | Job status is "Sent" unless printer readback confirms; never claim "Printed" without confirmation | Honest status |
 | D18 | Direct-thermal synthetic (polypropylene) media | ZQ630 Plus is direct thermal only; paper fades |
-| D19 | UI: light theme content, fixed dark navy sidebar, dark hero on Import only | Matches the brief |
+| D19 | UI: light theme content, fixed dark sidebar, dark hero on Import (and the sign-in/setup backdrop). Colours follow the Novo Lean Solutions brand (logo green #487037, warm grey #847F72); originally dark navy, changed 2026-09-30 at the owner's request | Matches the brief and the company brand |
 | D20 | Icons: lucide-react only | One consistent set |
 | D21 | Working product name: "Novo Label Studio" (configurable company name in Settings) | Branding placeholder |
 

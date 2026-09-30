@@ -236,3 +236,16 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     `BACKUP_TZ` default UTC), writing `backups/label-<stamp>.dump` + `assets-<stamp>.tar.gz`, deleting files
     older than 30 days. `scripts/backup-now.ps1` and `scripts/restore.ps1` were added (not in your script list)
     so A12 can be run; restore was tested: wipe → restore gave identical label rows and bitmap hashes.
+87. **Brand refresh (D19 changed at the owner's request, 2026-09-30).** Tokens re-coloured to the Novo Lean
+    Solutions logo (green `#487037`, warm grey `#847F72`); deep-green sidebar with the logo on a white tile (the
+    logo has white knock-outs); engineering line-art backdrop (`web/public/art/`) on sign-in, setup and the import
+    hero; faint dot grid behind content; soft card shadows. Styling only — no behaviour changed.
+88. **Pictures in spreadsheet cells become part images (owner's request, 2026-09-30).** XLSX only: Excel "Place
+    in Cell" pictures (rich values) and floating pictures anchored at a cell's top-left are read from the package
+    XML/media (never executed). A new mapping target "Image (pictures in cells)" (key `image`, now reserved;
+    auto-suggested for Image/Picture/Photo headers). During validation each picture is re-encoded to PNG ≤ 1024 px
+    and stored as an asset (so review can show thumbnails via the new `GET /assets/{id}`); the part links to it
+    only on commit. A different picture is an update ("Excel wins", shown as old → new thumbnails); an empty cell
+    keeps the current image; a text value in the image column, or an unreadable picture, makes the row invalid.
+    Assets staged by a discarded import stay on disk (content-addressed, small). No schema change. Also added
+    "NOVO P/N" / "P/N" as part-number header synonyms.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
@@ -20,19 +21,23 @@ from app.auth.sessions import now_utc
 from app.config import get_settings
 from app.db import sessionmaker
 from app.imports.engine import (
+    BAD_PICTURE,
+    NO_PICTURE,
     CleanRow,
     Context,
     ExistingPart,
     RowResult,
+    StagedImage,
     classify,
     clean,
     duplicate_rows,
     missing_rows,
     raw_to_text,
 )
-from app.imports.mapping import signature, suggest
-from app.imports.parse import ParseError, Sheet, file_kind, read_file
+from app.imports.mapping import IMAGE_TARGET, signature, suggest
+from app.imports.parse import CellImage, ParseError, Sheet, file_kind, read_file
 from app.models import CustomFieldDef, ImportBatch, ImportMapping, ImportRow, Part, PartAlias
+from app.parts.images import PictureError, png_from_picture, store_png
 from app.parts.values import FieldDef
 
 log = logging.getLogger("app.imports")
@@ -169,7 +174,7 @@ async def suggested_mapping(db: AsyncSession, headers: list[str]) -> tuple[dict[
              ).scalar_one_or_none()
     defs = await custom_defs(db)
     if saved is not None:
-        valid = set(defs) | {"part_number", "part_name", "description", "revision"}
+        valid = set(defs) | {"part_number", "part_name", "description", "revision", IMAGE_TARGET}
         return {h: (saved.mapping.get(h) if saved.mapping.get(h) in valid else None) for h in headers}, saved.name
     return suggest(headers, [(d.key, d.label) for d in defs.values()]), None
 
@@ -179,7 +184,7 @@ async def load_context(db: AsyncSession, targets: list[str]) -> Context:
     defs = await custom_defs(db)
     parts: dict[str, ExistingPart] = {}
     rows = await db.execute(select(Part.id, Part.part_number, Part.part_number_norm, Part.part_name, Part.description,
-                                   Part.revision, Part.custom_data, Part.status))
+                                   Part.revision, Part.custom_data, Part.status, Part.image_asset_id))
     for r in rows:
         values: dict[str, Any] = dict(r.custom_data or {})
         values["part_number"] = r.part_number
@@ -188,6 +193,8 @@ async def load_context(db: AsyncSession, targets: list[str]) -> Context:
             values["description"] = r.description
         if r.revision is not None:
             values["revision"] = r.revision
+        if r.image_asset_id is not None:
+            values[IMAGE_TARGET] = str(r.image_asset_id)
         parts[r.part_number_norm] = ExistingPart(id=r.id, part_number=r.part_number, status=r.status, values=values)
     owners = await db.execute(select(func.upper(func.btrim(PartAlias.alias)), Part.part_number)
                               .join(Part, Part.id == PartAlias.part_id))
@@ -198,6 +205,28 @@ async def load_context(db: AsyncSession, targets: list[str]) -> Context:
 def raw_rows(sheet: Sheet, mapping: dict[str, str | None]) -> list[tuple[int, dict[str, Any]]]:
     index = {target: sheet.headers.index(h) for h, target in mapping.items() if target and h in sheet.headers}
     return [(n, {t: cells[i] for t, i in index.items()}) for n, cells in sheet.rows]
+
+
+async def stage_pictures(db: AsyncSession, rows: list[tuple[int, dict[str, Any]]], user_id: uuid.UUID) -> None:
+    """Replaces each image cell with a StagedImage: pictures are re-encoded (off the event loop) and stored as
+    assets now, so the review can show them; the part only links to its asset on commit. Identical pictures are
+    decoded once."""
+    done: dict[bytes, StagedImage] = {}
+    for _, raw in rows:
+        value = raw.get(IMAGE_TARGET)
+        if value is None:
+            continue
+        if not isinstance(value, CellImage):
+            raw[IMAGE_TARGET] = StagedImage(error=NO_PICTURE)
+            continue
+        key = hashlib.sha256(value.data).digest()
+        if key not in done:
+            try:
+                png = await to_thread.run_sync(png_from_picture, value.data)
+                done[key] = StagedImage(asset_id=str((await store_png(db, png, user_id)).id))
+            except PictureError:
+                done[key] = StagedImage(error=BAD_PICTURE)
+        raw[IMAGE_TARGET] = done[key]
 
 
 def _json(value: Any) -> str | None:
@@ -242,6 +271,9 @@ async def validate(batch_id: uuid.UUID, mapping: dict[str, str | None]) -> None:
             targets = [t for t in mapping.values() if t]
             ctx = await load_context(db, targets)
             rows = raw_rows(sheet, mapping)
+            if IMAGE_TARGET in targets:
+                await stage_pictures(db, rows, batch.created_by)
+                await db.commit()
         total = len(rows)
         await _set(batch_id, progress_total=total, progress_done=0, total_rows=total)
 

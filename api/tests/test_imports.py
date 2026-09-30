@@ -4,20 +4,25 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import uuid
+import zipfile
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
 import openpyxl
 import pytest
 import xlwt
+from openpyxl.drawing.image import Image as XlImage
+from PIL import Image
 from sqlalchemy import select, text
 
 from app.db import sessionmaker
 from app.imports import service
 from app.imports.mapping import normalize_header, signature, suggest
-from app.imports.parse import read_csv
+from app.imports.parse import CellImage, read_csv, read_xlsx
 from app.models import AuditLog, ImportBatch, Part, PartAlias
 
 V = "/api/v1"
@@ -385,3 +390,145 @@ async def test_imports_are_admin_only(admin: httpx.AsyncClient, operator: httpx.
         assert (await operator.request(method, f"{V}{path}", json=body)).status_code == 403, path
     r = await operator.post(f"{V}/imports", files={"file": ("p.csv", b"pn,name\r\nA,B\r\n", "text/csv")})
     assert r.status_code == 403
+
+
+# ---------------------------------------------------------------- pictures in cells
+def png(color: tuple[int, int, int], size: tuple[int, int] = (40, 30)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def xlsx_with_cell_pictures(rows: list[list[Any]], pictures: dict[str, bytes]) -> bytes:
+    """An XLSX with Excel "Place in Cell" pictures, as Excel 365 writes them: the cell holds #VALUE! with a
+    value-metadata index (vm) -> metadata.xml -> rich value -> richValueRel -> media."""
+    base = zipfile.ZipFile(io.BytesIO(xlsx_bytes({"Parts": rows})))
+    files = {n: base.read(n) for n in base.namelist()}
+    sheet = files["xl/worksheets/sheet1.xml"].decode()
+    refs = list(pictures)
+    for i, ref in enumerate(refs, start=1):
+        new = f'<c r="{ref}" t="e" vm="{i}"><v>#VALUE!</v></c>'
+        cell = re.search(rf'<c r="{ref}"[^>]*?(/>|>.*?</c>)', sheet)
+        if cell:
+            sheet = sheet.replace(cell.group(0), new)
+        else:  # empty cell: append it to its row
+            row = re.sub(r"[A-Z]+", "", ref)
+            m = re.search(rf'<row r="{row}"[^>]*>.*?</row>', sheet)
+            assert m is not None
+            sheet = sheet.replace(m.group(0), m.group(0)[: -len("</row>")] + new + "</row>")
+    files["xl/worksheets/sheet1.xml"] = sheet.encode()
+    n = len(refs)
+    files["xl/metadata.xml"] = (
+        '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:xlrd="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata">'
+        '<metadataTypes count="1"><metadataType name="XLRICHVALUE"/></metadataTypes>'
+        f'<futureMetadata name="XLRICHVALUE" count="{n}">'
+        + "".join(f'<bk><extLst><ext uri="x"><xlrd:rvb i="{i}"/></ext></extLst></bk>' for i in range(n))
+        + f'</futureMetadata><valueMetadata count="{n}">'
+        + "".join(f'<bk><rc t="1" v="{i}"/></bk>' for i in range(n)) + "</valueMetadata></metadata>").encode()
+    rd = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata"
+    files["xl/richData/rdrichvaluestructure.xml"] = (
+        f'<rvStructures xmlns="{rd}" count="1"><s t="_localImage"><k n="_rvRel:LocalImageIdentifier" t="i"/>'
+        '<k n="CalcOrigin" t="i"/></s></rvStructures>').encode()
+    files["xl/richData/rdrichvalue.xml"] = (
+        f'<rvData xmlns="{rd}" count="{n}">' + "".join(f'<rv s="0"><v>{i}</v><v>5</v></rv>' for i in range(n))
+        + "</rvData>").encode()
+    files["xl/richData/richValueRel.xml"] = (
+        '<richValueRels xmlns="http://schemas.microsoft.com/office/spreadsheetml/2022/richvaluerel" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        + "".join(f'<rel r:id="rId{i + 1}"/>' for i in range(n)) + "</richValueRels>").encode()
+    files["xl/richData/_rels/richValueRel.xml.rels"] = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + "".join(f'<Relationship Id="rId{i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/'
+                  f'relationships/image" Target="../media/image{i + 1}.png"/>' for i in range(n))
+        + "</Relationships>").encode()
+    for i, ref in enumerate(refs, start=1):
+        files[f"xl/media/image{i}.png"] = pictures[ref]
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in files.items():
+            z.writestr(name, data)
+    return out.getvalue()
+
+
+def test_reads_place_in_cell_and_floating_pictures(tmp_path: Path) -> None:
+    red, blue = png((255, 0, 0)), png((0, 0, 255))
+    f = tmp_path / "cell.xlsx"
+    f.write_bytes(xlsx_with_cell_pictures([["Part No", "Name", "Photo"], ["P-1", "One", None], ["P-2", "Two", None],
+                                           ["P-3", "Three", None]], {"C2": red, "C4": blue}))
+    sheet = read_xlsx(f)[0]
+    photo = {n: cells[2] for n, cells in sheet.rows}
+    assert isinstance(photo[2], CellImage) and photo[2].data == red
+    assert photo[3] is None
+    assert isinstance(photo[4], CellImage) and photo[4].data == blue
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.append(["Part No", "Name", "Photo"])
+    ws.append(["F-1", "Floating", None])
+    ws.append(["F-2", "No picture", None])
+    ws.add_image(XlImage(io.BytesIO(red)), "C2")
+    g = tmp_path / "float.xlsx"
+    wb.save(g)
+    by_row = {n: cells for n, cells in read_xlsx(g)[0].rows}
+    assert isinstance(by_row[2][2], CellImage) and by_row[3][2] is None
+
+
+async def test_import_pictures_become_part_images(admin: httpx.AsyncClient) -> None:
+    red, blue, green = png((255, 0, 0)), png((0, 0, 255)), png((0, 160, 0))
+    head = ["NOVO P/N", "Part Name", "Photo"]
+    data = xlsx_with_cell_pictures([head, ["4705-087", "Lower Plate", None], ["4705-088", "Wheel Spacer", None],
+                                    ["4705-089", "No photo", None]], {"C2": red, "C3": red})
+    batch = await upload(admin, "photos.xlsx", data)
+    assert batch["mapping"]["Photo"] == "image"
+    assert [c["samples"] for c in batch["columns"] if c["header"] == "Photo"] == [["[picture]", "[picture]"]]
+    staged = await map_and_stage(admin, batch)
+    assert staged["counts"]["new"] == 3
+    new = {r["data"]["part_number"]: r["data"] for r in await rows(admin, batch["id"], "new")}
+    assert new["4705-087"]["image"] == new["4705-088"]["image"]  # identical pictures share one asset
+    assert "image" not in new["4705-089"]
+    shown = await admin.get(f"{V}/assets/{new['4705-087']['image']}")
+    assert shown.status_code == 200 and shown.headers["content-type"] == "image/png"
+    assert (await admin.post(f"{V}/imports/{batch['id']}/commit")).status_code == 200
+    async with sessionmaker()() as db:
+        parts = {p.part_number: p for p in (await db.execute(select(Part))).scalars()}
+        assert str(parts["4705-087"].image_asset_id) == new["4705-087"]["image"]
+        assert parts["4705-089"].image_asset_id is None and "image" not in parts["4705-087"].custom_data
+    first_image = new["4705-087"]["image"]
+
+    # Re-import: a different picture replaces (shown as a change), the same picture is unchanged, an empty cell
+    # keeps the existing image, and a new picture fills a part that had none.
+    data2 = xlsx_with_cell_pictures([head, ["4705-087", "Lower Plate", None], ["4705-088", "Wheel Spacer", None],
+                                     ["4705-089", "No photo", None]], {"C2": blue, "C4": green})
+    again = await upload(admin, "photos-v2.xlsx", data2)
+    staged = await map_and_stage(admin, again)
+    assert (staged["counts"]["updated"], staged["counts"]["unchanged"]) == (2, 1)
+    upd = {r["data"]["part_number"]: r["diff"] for r in await rows(admin, again["id"], "update")}
+    assert upd["4705-087"]["image"][0] == first_image and upd["4705-087"]["image"][1] != first_image
+    assert upd["4705-089"]["image"][0] is None
+    # The picture can't be typed over in review.
+    row = next(r for r in await rows(admin, again["id"]) if r["data"]["part_number"] == "4705-087")
+    r = await admin.patch(f"{V}/imports/{again['id']}/rows/{row['id']}", json={"data": {"image": str(uuid.uuid4())}})
+    assert r.json()["data"]["image"] == upd["4705-087"]["image"][1]
+    assert (await admin.post(f"{V}/imports/{again['id']}/commit")).status_code == 200
+    async with sessionmaker()() as db:
+        parts = {p.part_number: p for p in (await db.execute(select(Part))).scalars()}
+        assert str(parts["4705-087"].image_asset_id) == upd["4705-087"]["image"][1]
+        assert str(parts["4705-088"].image_asset_id) == first_image  # empty cell: kept
+        assert parts["4705-089"].image_asset_id is not None
+
+
+async def test_image_column_without_pictures_is_invalid(admin: httpx.AsyncClient) -> None:
+    batch = await upload(admin, "p.csv", csv_bytes([["pn", "name", "photo"], ["T-1", "One", "bolt.jpg"],
+                                                    ["T-2", "Two", None]]))
+    assert batch["mapping"]["photo"] == "image"
+    staged = await map_and_stage(admin, batch)
+    assert (staged["counts"]["new"], staged["counts"]["invalid"]) == (1, 1)
+    bad = (await rows(admin, batch["id"], "invalid"))[0]
+    assert bad["errors"] == [{"field": "image",
+                              "msg": "This cell has no picture. Place the picture in the cell in Excel (.xlsx)."}]
+    unreadable = xlsx_with_cell_pictures([["pn", "name", "photo"], ["U-1", "One", None]], {"C2": b"not an image"})
+    b2 = await map_and_stage(admin, await upload(admin, "u.xlsx", unreadable))
+    bad = (await rows(admin, b2["id"], "invalid"))[0]
+    assert bad["errors"][0]["msg"] == "The picture in this cell can't be read. Use a PNG, JPEG or WebP picture."

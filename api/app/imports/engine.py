@@ -21,6 +21,27 @@ from app.parts.values import (
 )
 
 
+IMAGE = "image"  # mapping target for pictures placed in cells (see mapping.IMAGE_TARGET)
+NO_PICTURE = "This cell has no picture. Place the picture in the cell in Excel (.xlsx)."
+BAD_PICTURE = "The picture in this cell can't be read. Use a PNG, JPEG or WebP picture."
+
+
+@dataclass(frozen=True)
+class StagedImage:
+    """An image cell after the pictures were stored: the asset id, or why it can't be used."""
+
+    asset_id: str | None = None
+    error: str | None = None
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
 @dataclass(frozen=True)
 class ExistingPart:
     id: uuid.UUID
@@ -74,6 +95,17 @@ def clean(source_row: int, raw: dict[str, Any], ctx: Context) -> CleanRow:
     for target in ctx.targets:
         value = raw.get(target)
         if is_blank(value):
+            continue
+        if target == IMAGE:
+            # A stored picture (validation) or the asset id already staged (re-check after a row edit). An
+            # empty cell never clears an existing image.
+            if isinstance(value, StagedImage) and value.asset_id:
+                data[IMAGE] = value.asset_id
+            elif isinstance(value, str) and _is_uuid(value):
+                data[IMAGE] = value
+            else:
+                errors.append({"field": IMAGE, "msg": value.error if isinstance(value, StagedImage) and value.error
+                               else NO_PICTURE})
             continue
         if target in CORE_FIELDS:
             text = raw_to_text(value)

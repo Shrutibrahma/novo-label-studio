@@ -5,11 +5,15 @@ from __future__ import annotations
 
 import csv
 import io
+import posixpath
+import re
+import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 import charset_normalizer
 import openpyxl
@@ -153,6 +157,167 @@ def read_csv(data: bytes) -> list[Sheet]:
     return [_finish("", rows)]
 
 
+# ---------------------------------------------------------------- XLSX pictures
+class CellImage:
+    """A picture in a cell: Excel's "Place in Cell" picture, or a floating picture whose top-left corner is
+    anchored in the cell. Holds the raw image bytes; shown as "[picture]" in samples."""
+
+    __slots__ = ("data",)
+
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+
+    def __str__(self) -> str:
+        return "[picture]"
+
+    def __repr__(self) -> str:
+        return f"CellImage({len(self.data)} bytes)"
+
+
+_NS = {
+    "m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    "pr": "http://schemas.openxmlformats.org/package/2006/relationships",
+    "xdr": "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing",
+    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    "rd": "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata",
+    "rvr": "http://schemas.microsoft.com/office/spreadsheetml/2022/richvaluerel",
+    "xlrd": "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata",
+}
+MAX_PICTURE_BYTES = 10 * 1024 * 1024
+_CELL_REF = re.compile(r"^([A-Z]{1,3})(\d+)$")
+
+
+def _col_index(letters: str) -> int:
+    n = 0
+    for ch in letters:
+        n = n * 26 + (ord(ch) - 64)
+    return n - 1
+
+
+def _resolve(base_part: str, target: str) -> str:
+    """Relationship target -> zip member name (targets are relative to the part's folder, or absolute)."""
+    if target.startswith("/"):
+        return target.lstrip("/")
+    return posixpath.normpath(posixpath.join(posixpath.dirname(base_part), target))
+
+
+def _rels(z: zipfile.ZipFile, part: str) -> dict[str, str]:
+    rels_name = posixpath.join(posixpath.dirname(part), "_rels", posixpath.basename(part) + ".rels")
+    if rels_name not in z.namelist():
+        return {}
+    root = ElementTree.fromstring(z.read(rels_name))
+    return {r.get("Id", ""): _resolve(part, r.get("Target", "")) for r in root.findall("pr:Relationship", _NS)}
+
+
+def _read_member(z: zipfile.ZipFile, name: str) -> bytes | None:
+    try:
+        info = z.getinfo(name)
+    except KeyError:
+        return None
+    if info.file_size > MAX_PICTURE_BYTES:
+        return None
+    return z.read(info)
+
+
+def _sheet_part(z: zipfile.ZipFile, sheet_name: str) -> str | None:
+    wb = ElementTree.fromstring(z.read("xl/workbook.xml"))
+    rels = _rels(z, "xl/workbook.xml")
+    for s in wb.findall("m:sheets/m:sheet", _NS):
+        if s.get("name") == sheet_name:
+            return rels.get(s.get(f"{{{_NS['r']}}}id", ""))
+    return None
+
+
+def _rich_value_images(z: zipfile.ZipFile) -> list[bytes | None]:
+    """Value-metadata index (the cell's 1-based `vm`, minus one) -> picture bytes, for "Place in Cell" pictures."""
+    names = set(z.namelist())
+    if "xl/metadata.xml" not in names or "xl/richData/rdrichvalue.xml" not in names:
+        return []
+    meta = ElementTree.fromstring(z.read("xl/metadata.xml"))
+    types = [t.get("name") for t in meta.findall("m:metadataTypes/m:metadataType", _NS)]
+    future = {f.get("name"): [b.find(".//xlrd:rvb", _NS) for b in f.findall("m:bk", _NS)]
+              for f in meta.findall("m:futureMetadata", _NS)}
+    rich_blocks = future.get("XLRICHVALUE", [])
+    # Which position in each rich value holds the image relationship index, per structure.
+    rel_pos: list[int | None] = []
+    if "xl/richData/rdrichvaluestructure.xml" in names:
+        for s in ElementTree.fromstring(z.read("xl/richData/rdrichvaluestructure.xml")).findall("rd:s", _NS):
+            keys = [k.get("n") for k in s.findall("rd:k", _NS)]
+            rel_pos.append(keys.index("_rvRel:LocalImageIdentifier") if "_rvRel:LocalImageIdentifier" in keys else None)
+    values = ElementTree.fromstring(z.read("xl/richData/rdrichvalue.xml")).findall("rd:rv", _NS)
+    rel_ids: list[str] = []
+    if "xl/richData/richValueRel.xml" in names:
+        rel_ids = [r.get(f"{{{_NS['r']}}}id", "")
+                   for r in ElementTree.fromstring(z.read("xl/richData/richValueRel.xml")).findall("rvr:rel", _NS)]
+    targets = _rels(z, "xl/richData/richValueRel.xml")
+
+    def picture(rv_index: int) -> bytes | None:
+        if not 0 <= rv_index < len(values):
+            return None
+        rv = values[rv_index]
+        s = int(rv.get("s", "0"))
+        pos = rel_pos[s] if s < len(rel_pos) else None
+        vs = rv.findall("rd:v", _NS)
+        if pos is None or pos >= len(vs) or not (vs[pos].text or "").strip().isdigit():
+            return None
+        rel = int((vs[pos].text or "").strip())
+        if rel >= len(rel_ids) or rel_ids[rel] not in targets:
+            return None
+        return _read_member(z, targets[rel_ids[rel]])
+
+    out: list[bytes | None] = []
+    for bk in meta.findall("m:valueMetadata/m:bk", _NS):
+        rc = bk.find("m:rc", _NS)
+        data = None
+        if rc is not None:
+            t, v = int(rc.get("t", "0")), int(rc.get("v", "-1"))
+            if 1 <= t <= len(types) and types[t - 1] == "XLRICHVALUE" and 0 <= v < len(rich_blocks):
+                rvb = rich_blocks[v]
+                if rvb is not None and (rvb.get("i") or "").isdigit():
+                    data = picture(int(rvb.get("i") or "0"))
+        out.append(data)
+    return out
+
+
+def xlsx_pictures(path: Path, sheet_name: str) -> dict[tuple[int, int], bytes]:
+    """(source row number, 0-based column) -> picture bytes for one sheet. Reads only the package XML and media;
+    nothing in the workbook is executed. Unreadable picture parts are skipped (the cell then has no picture)."""
+    out: dict[tuple[int, int], bytes] = {}
+    try:
+        with zipfile.ZipFile(path) as z:
+            part = _sheet_part(z, sheet_name)
+            if part is None or part not in z.namelist():
+                return out
+            # Floating pictures: anchored at their top-left cell.
+            for target in [t for t in _rels(z, part).values() if "/drawings/" in t and t in z.namelist()]:
+                drawing = ElementTree.fromstring(z.read(target))
+                media = _rels(z, target)
+                for anchor in list(drawing.findall("xdr:twoCellAnchor", _NS)) + list(drawing.findall("xdr:oneCellAnchor", _NS)):
+                    frm, blip = anchor.find("xdr:from", _NS), anchor.find(".//a:blip", _NS)
+                    if frm is None or blip is None:
+                        continue
+                    col, row = frm.findtext("xdr:col", "", _NS), frm.findtext("xdr:row", "", _NS)
+                    embed = blip.get(f"{{{_NS['r']}}}embed", "")
+                    if col.isdigit() and row.isdigit() and embed in media:
+                        data = _read_member(z, media[embed])
+                        if data:
+                            out.setdefault((int(row) + 1, int(col)), data)
+            # "Place in Cell" pictures: cells with a value-metadata index (vm) that points at a rich value image.
+            rich = _rich_value_images(z)
+            if rich:
+                with z.open(part) as f:
+                    for _, el in ElementTree.iterparse(f):
+                        if el.tag == f"{{{_NS['m']}}}c":
+                            vm, m = el.get("vm"), _CELL_REF.match(el.get("r", ""))
+                            if vm and vm.isdigit() and m and 1 <= int(vm) <= len(rich) and rich[int(vm) - 1]:
+                                out[(int(m.group(2)), _col_index(m.group(1)))] = rich[int(vm) - 1]  # type: ignore[assignment]
+                            el.clear()
+    except (zipfile.BadZipFile, ElementTree.ParseError, KeyError, ValueError):
+        return {}
+    return out
+
+
 # ---------------------------------------------------------------- XLSX
 def read_xlsx(path: Path, only: str | None = None) -> list[Sheet]:
     try:
@@ -166,8 +331,15 @@ def read_xlsx(path: Path, only: str | None = None) -> list[Sheet]:
                 continue
             rows: list[tuple[int, list[Any]]] = []
             non_empty = 0
+            pictures = xlsx_pictures(path, ws.title)
+            by_row: dict[int, list[tuple[int, bytes]]] = {}
+            for (r, c), data in pictures.items():
+                by_row.setdefault(r, []).append((c, data))
             for n, record in enumerate(ws.iter_rows(values_only=True), start=1):
                 cells = [normalize_cell(c) for c in record]
+                for c, data in by_row.get(n, ()):
+                    cells += [None] * (c + 1 - len(cells))
+                    cells[c] = CellImage(data)  # replaces the "#VALUE!" Excel stores in picture cells
                 if _is_empty(cells):
                     continue
                 rows.append((n, cells))

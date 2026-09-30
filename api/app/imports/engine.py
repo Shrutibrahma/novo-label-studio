@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
-from app.imports.parse import number_as_text
+from app.imports.parse import CellImage, number_as_text
 from app.parts.values import (
     CORE_FIELDS,
     FieldDef,
@@ -107,6 +107,8 @@ def clean(source_row: int, raw: dict[str, Any], ctx: Context) -> CleanRow:
                 errors.append({"field": IMAGE, "msg": value.error if isinstance(value, StagedImage) and value.error
                                else NO_PICTURE})
             continue
+        if isinstance(value, CellImage):
+            continue  # a picture mapped to a text field: nothing to store (never the text "[picture]")
         if target in CORE_FIELDS:
             text = raw_to_text(value)
             label, max_len = CORE_FIELDS[target]

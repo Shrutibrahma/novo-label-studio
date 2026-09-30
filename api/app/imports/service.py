@@ -52,6 +52,7 @@ class Meta:
     sheets: list[tuple[str, int]]
     headers: list[str]
     samples: dict[str, list[str]]
+    pictures: frozenset[str] = frozenset()  # headers of columns that hold pictures
 
 
 _meta: dict[uuid.UUID, Meta] = {}
@@ -82,6 +83,17 @@ def _samples(sheet: Sheet) -> dict[str, list[str]]:
         if all(len(v) >= 3 for v in out.values()):
             break
     return out
+
+
+def _picture_headers(sheet: Sheet) -> frozenset[str]:
+    found: set[str] = set()
+    for _, cells in sheet.rows:
+        found.update(h for h, v in zip(sheet.headers, cells, strict=False) if isinstance(v, CellImage))
+    return frozenset(found)
+
+
+def _build_meta(sheets: list[tuple[str, int]], sheet: Sheet) -> Meta:
+    return Meta(sheets=sheets, headers=sheet.headers, samples=_samples(sheet), pictures=_picture_headers(sheet))
 
 
 def _read_sheets(path: Path, name: str, only: str | None) -> list[Sheet]:
@@ -125,7 +137,7 @@ async def parse_upload(batch_id: uuid.UUID, file_name: str) -> None:
         await _set(batch_id, status="needs_sheet")
         return
     sheet = sheets[0]
-    _meta[batch_id] = Meta(sheets=listing, headers=sheet.headers, samples=_samples(sheet))
+    _meta[batch_id] = _build_meta(listing, sheet)
     await _set(batch_id, status="mapping", sheet_name=sheet.name or None, total_rows=len(sheet.rows))
 
 
@@ -138,7 +150,7 @@ async def choose_sheet(batch_id: uuid.UUID, file_name: str, sheet_name: str) -> 
         return
     sheet = sheets[0]
     listing = _meta.get(batch_id).sheets if batch_id in _meta else [(sheet.name, len(sheet.rows))]
-    _meta[batch_id] = Meta(sheets=listing, headers=sheet.headers, samples=_samples(sheet))
+    _meta[batch_id] = _build_meta(listing, sheet)
     await _set(batch_id, status="mapping", sheet_name=sheet.name, total_rows=len(sheet.rows))
 
 
@@ -156,7 +168,7 @@ async def meta_for(batch: ImportBatch) -> Meta | None:
         meta = Meta(sheets=[(s.name, len(s.rows)) for s in sheets], headers=[], samples={})
     else:
         s = sheets[0]
-        meta = Meta(sheets=[(s.name, len(s.rows))], headers=s.headers, samples=_samples(s))
+        meta = _build_meta([(s.name, len(s.rows))], s)
     _meta[batch.id] = meta
     return meta
 
@@ -168,15 +180,25 @@ async def custom_defs(db: AsyncSession) -> dict[str, FieldDef]:
                             required=f.required) for f in rows}
 
 
-async def suggested_mapping(db: AsyncSession, headers: list[str]) -> tuple[dict[str, str | None], str | None]:
-    """Saved mapping for the header signature if one exists (with its name), else synonym suggestions."""
+async def suggested_mapping(db: AsyncSession, headers: list[str], pictures: frozenset[str] = frozenset()
+                            ) -> tuple[dict[str, str | None], str | None]:
+    """Saved mapping for the header signature if one exists (with its name), else synonym suggestions. A column
+    of pictures is always suggested as the image (a mapping saved before image import existed may have sent it to
+    a text field), or Ignore if another column already is."""
     saved = (await db.execute(select(ImportMapping).where(ImportMapping.header_signature == signature(headers)))
              ).scalar_one_or_none()
     defs = await custom_defs(db)
     if saved is not None:
         valid = set(defs) | {"part_number", "part_name", "description", "revision", IMAGE_TARGET}
-        return {h: (saved.mapping.get(h) if saved.mapping.get(h) in valid else None) for h in headers}, saved.name
-    return suggest(headers, [(d.key, d.label) for d in defs.values()]), None
+        mapping = {h: (saved.mapping.get(h) if saved.mapping.get(h) in valid else None) for h in headers}
+        name: str | None = saved.name
+    else:
+        mapping, name = suggest(headers, [(d.key, d.label) for d in defs.values()]), None
+    for h in headers:
+        if h in pictures and mapping.get(h) != IMAGE_TARGET:
+            taken = any(t == IMAGE_TARGET for k, t in mapping.items() if k != h)
+            mapping[h] = None if taken else IMAGE_TARGET
+    return mapping, name
 
 
 # ---------------------------------------------------------------- step 2: validate + diff

@@ -147,7 +147,7 @@ async def batch_out(db: AsyncSession, batch: ImportBatch) -> BatchOut:
                 mapping = {h: saved.mapping.get(h) for h in meta.headers}
                 saved_name = saved.name
         else:
-            mapping, saved_name = await service.suggested_mapping(db, meta.headers)
+            mapping, saved_name = await service.suggested_mapping(db, meta.headers, meta.pictures)
     accepted = dict((await db.execute(
         select(ImportRow.action, func.count()).where(ImportRow.batch_id == batch.id, ImportRow.accepted.is_(True),
                                                      ImportRow.action.in_(("new", "update", "missing")))

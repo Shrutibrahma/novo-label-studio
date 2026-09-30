@@ -532,3 +532,21 @@ async def test_image_column_without_pictures_is_invalid(admin: httpx.AsyncClient
     b2 = await map_and_stage(admin, await upload(admin, "u.xlsx", unreadable))
     bad = (await rows(admin, b2["id"], "invalid"))[0]
     assert bad["errors"][0]["msg"] == "The picture in this cell can't be read. Use a PNG, JPEG or WebP picture."
+
+
+async def test_saved_mapping_from_before_image_import_still_imports_pictures(admin: httpx.AsyncClient) -> None:
+    """A mapping saved before image import existed sent the picture column to a text field. The picture column is
+    now suggested as the image, and a picture is never stored as text."""
+    head = ["NOVO P/N", "Part Name", "Photo"]
+    data = xlsx_with_cell_pictures([head, ["S-1", "One", None], ["S-2", "Two", None]], {"C2": png((9, 9, 9))})
+    first = await upload(admin, "sample.xlsx", data)
+    staged = await map_and_stage(admin, first, first["mapping"] | {"Photo": "description"})  # the old mapping
+    assert all("description" not in r["data"] for r in await rows(admin, first["id"], "new"))
+    assert (await admin.post(f"{V}/imports/{first['id']}/commit")).status_code == 200
+
+    again = await upload(admin, "sample.xlsx", data)
+    assert again["saved_mapping_name"] == "sample" and again["mapping"]["Photo"] == "image"
+    staged = await map_and_stage(admin, again)
+    upd = (await rows(admin, again["id"], "update"))[0]
+    assert upd["data"]["part_number"] == "S-1" and upd["diff"]["image"][0] is None
+    assert staged["counts"]["unchanged"] == 1

@@ -72,6 +72,7 @@ ERRORS: dict[str, tuple[int, str]] = {
     "PASSWORDS_DIFFERENT": (422, "The passwords don't match."),
     "SETUP_DONE": (409, "Setup is already complete."),
     "SIZE_NAME_TAKEN": (409, "A size with this name already exists."),
+    "VOID_REASON_SHORT": (422, "Reason must be at least 5 characters."),
     "CONFIG_INVALID": (422, "This label configuration isn't valid. Reload and try again."),
     "CONFIG_FIELD_UNKNOWN": (422, "A field on this label no longer exists. Remove it and publish again."),
     "IDEMPOTENCY_KEY_REQUIRED": (422, "Idempotency-Key is required."),

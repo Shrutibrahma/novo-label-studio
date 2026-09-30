@@ -36,12 +36,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref,
 ) {
   const iconSize = size === "big" ? 20 : size === "sm" ? 16 : 20;
+  // Disabled buttons swallow mouse events in Chrome; with a tooltip, let the wrapper receive the hover instead.
+  const passThrough = tooltip && (disabled || loading) ? "pointer-events-none" : "";
   const btn = (
     <button
       ref={ref}
       type={type ?? "button"}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center rounded-[6px] whitespace-nowrap transition-colors duration-150 ease-out disabled:cursor-not-allowed ${VARIANT[variant]} ${SIZE[size]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-[6px] whitespace-nowrap transition-colors duration-150 ease-out disabled:cursor-not-allowed ${VARIANT[variant]} ${SIZE[size]} ${passThrough} ${className}`}
       {...rest}
     >
       {loading ? <span className="spinner" aria-hidden /> : Icon ? <Icon size={iconSize} strokeWidth={1.75} aria-hidden /> : null}

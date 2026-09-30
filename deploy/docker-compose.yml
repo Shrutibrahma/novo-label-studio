@@ -50,6 +50,25 @@ services:
       api:
         condition: service_healthy
 
+  # Nightly pg_dump (custom format) + tar of the part images into ../backups, kept 30 days (section 15).
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    entrypoint: ["sh", "/backup.sh"]
+    command: ["loop"]
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD}
+      BACKUP_AT: ${BACKUP_AT:-02:00}
+      BACKUP_KEEP_DAYS: "30"
+      TZ: ${BACKUP_TZ:-UTC}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ../backups:/backups
+      - assets:/data/assets
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
   assets:

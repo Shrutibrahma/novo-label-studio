@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { ADMIN, OPERATOR, saveState, signIn, signOut } from "./support";
+import { ADMIN, agentJobFiles, OPERATOR, saveState, signIn, signOut, startAgent } from "./support";
 
-/** Flow 13.1 steps 1–3 and 5 (the agent-connected part runs in 05-print once the simulated agent starts). */
+/** Flow 13.1 (first install) with the agent in simulated mode, plus sign-in errors and operator navigation. */
 test("first install: setup wizard, sign-in errors, roles", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/setup$/);
@@ -34,6 +34,14 @@ test("first install: setup wizard, sign-in errors, roles", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Print test label" })).toBeDisabled();
   const printers = await (await page.request.get("/api/v1/printers")).json();
   saveState({ agentToken: token, printerId: printers[0].id });
+
+  // 13.1 step 3–4: install the agent with that token → "Agent connected" → "Print test label".
+  const before = agentJobFiles().length;
+  startAgent(token);
+  await expect(page.getByText("Agent connected. Printer: Ready")).toBeVisible({ timeout: 45_000 });
+  await page.getByRole("button", { name: "Print test label" }).click();
+  await expect(page.getByText("Sent to printer")).toBeVisible();
+  await expect.poll(() => agentJobFiles().length).toBe(before + 1);
   await page.getByRole("button", { name: "Finish" }).click();
   await expect(page).toHaveURL(/\/parts$/);
   await expect(page.getByText("Your parts list is empty")).toBeVisible();

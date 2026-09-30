@@ -16,3 +16,5 @@ deploy/.env
 backups/
 spike/m0/out/
 *.log
+.pytest-tmp/
+agent/.env

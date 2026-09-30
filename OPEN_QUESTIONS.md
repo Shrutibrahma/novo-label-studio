@@ -152,3 +152,47 @@ chosen, and why. None of these change the database schema or a Decision-log item
 54. **Editor layout.** Each field row has two lines (name + remove; role / caption / UPPERCASE) so the 440 px
     panel stays readable. Reordering: drag the grip, or Alt+↑ / Alt+↓ on it.
 55. **After publishing** the editor returns to the Configure list.
+
+## M5 — Print
+
+56. **Print request shape.** Beyond the spec's body: `loaded_size_confirmed` (see 61) and, per item,
+    `group: {total, start_index, count, group_id}` — `count` = how many boxes from `start_index` ("Print all" =
+    total, "Print one box" = 1) and `group_id` continues an existing box set so "Print box {n+1} of {T}" reuses
+    the group created by the first print. The response carries the jobs, the serials and the group ids.
+57. **Request size limit.** At most 1,000 labels per print request (`PRINT_TOO_LARGE`, "Labels must be between 1
+    and 1000."); jobs still split at 200 labels.
+58. **Quantity without serials** must be 1 (`FIELD_OUT_OF_RANGE`), because 9.2 only offers Quantity with serials.
+59. **Printing a non-active part** is refused (`NOT_FOUND`); Print Labels lists active parts only.
+60. **A label that doesn't fit** is refused by `POST /print` before any serial is allocated, with the first
+    render warning as the message (the widest-digit placeholder guarantees the real serial fits).
+61. **"I've loaded {size} labels" for operators.** Operators can't `PATCH /printers`, so the confirmation is sent
+    with the print (`loaded_size_confirmed: true`) and the API records it on `printer.loaded_label_size_id` in the
+    same transaction (audited `printer.update`). A batch mixing label sizes can't be confirmed in one go.
+62. **Size banner when nothing is confirmed yet.** "The printer has — labels loaded. This label is {size}."
+63. **Lease expiry message.** A job failed by the 60 s lease shows AGENT_UNREACHABLE's text.
+64. **Serial effects.** `failed` turns only `allocated` serials `unconfirmed`; `sent`/`confirmed` turn `allocated`
+    or `unconfirmed` serials `printed` (so a successful reprint of an unconfirmed label marks it printed).
+    Status reports that don't fit the 8.3 state machine get `409 INVALID_STATE`.
+65. **Simulated printer in a forced error state.** A job it receives while not ready fails with
+    "Simulated printer is {status}" (a real spooler would hold it; the API already refuses new prints then).
+66. **"Show on label" → QR code / Serial number.** The selection endpoint may only change fields, size and text
+    size, so "QR code" is shown ticked/unticked as configured and disabled; "Serial number" toggles the serial
+    line and is offered only when the label has serials. A newly ticked field gets the same default role as in
+    Configure (#46).
+67. **Batch mode** prints each part with its saved label (no per-part "Show on label"); a part with a Box sequence
+    prints BOX 1/1 in a batch.
+68. **Label counts.** "Print {n} labels" and "{labels} labels · {serials} serials" count physical labels
+    (distinct labels × copies); serials count distinct serialized labels.
+69. **Print dialog title** is "Print" (single and batch); the spec names none.
+70. **Preview pane width.** In the 560 px Print dialog pane a 4-inch label (812 dots) is wider than the pane at 1×;
+    7.7 says minimum 1×, so the pane scrolls horizontally; "Actual size" (96 CSS px/in) shows it whole.
+71. **"Print test label" result** appears as a toast with the job's status word ("Sent to printer" /
+    "Print failed: …").
+72. **Cancelling a queued job** exists in the API (`POST /jobs/{id}/cancel`) but the spec defines no control for
+    it, so the UI has none.
+73. **Agent development extras** (outside the spec's env table): `AGENT_PRINTER_MODE=simulated|usb` (default
+    simulated), `AGENT_OUTPUT_DIR`, `AGENT_CA_BUNDLE` (trust the self-signed certificate), `AGENT_HS_READBACK`
+    ([SPIKE], off), `AGENT_SIM_CONTROL_PORT` (127.0.0.1:9181, `POST /status`), `AGENT_LOG_DIR`; CLI
+    `labelstudio-agent sim-status <status>` and `zpl2png <file.zpl>`.
+74. **Service install.** `agent/packaging/build.ps1` (PyInstaller) and `install-service.ps1` (NSSM) are provided
+    but not run here: installing a Windows service is left to you on the printer laptop.

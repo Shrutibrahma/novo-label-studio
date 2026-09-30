@@ -104,6 +104,8 @@ if (-not $SkipE2E) {
                 if ($c -ne 0) { return $c }
                 $env:E2E_BASE_URL = 'https://localhost:9443'
                 $env:E2E_REPO_ROOT = $RepoRoot
+                $e2eOut = Join-Path $RepoRoot 'agent-output\e2e'
+                if (Test-Path $e2eOut) { Get-ChildItem $e2eOut -Recurse -File | Remove-Item -Force -ErrorAction SilentlyContinue }
                 return (Run npx playwright test)
             } finally { Pop-Location }
         } finally {

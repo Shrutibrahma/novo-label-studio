@@ -12,6 +12,7 @@ import { ApiError, SERVER_UNREACHABLE } from "../../lib/api";
 import { sizeText } from "../../lib/format";
 import { useDebounced, type PartListItem } from "../../lib/parts";
 import { usePartsQuery, useSentinel, type PartsParams } from "../parts/usePartsQuery";
+import { PrintLaunchHost, PrintRowActions, type PrintLaunch } from "./PrintLaunch";
 
 type Chip = "all" | "recent" | "out_of_date" | "never_printed";
 
@@ -40,6 +41,7 @@ export function PrintLabelsPage() {
   const [q, setQ] = useState(search.get("q") ?? "");
   const debouncedQ = useDebounced(q.trim(), 200);
   const [selected, setSelected] = useState<Map<string, PartListItem>>(new Map());
+  const [launch, setLaunch] = useState<PrintLaunch | null>(null);
 
   const params = useMemo<PartsParams>(() => ({ q: debouncedQ || undefined, status: "active", ...chipParams(chip) }), [debouncedQ, chip]);
   const query = usePartsQuery(params);
@@ -71,6 +73,13 @@ export function PrintLabelsPage() {
       return next;
     });
 
+  // Enter in the search with exactly one result opens its Print dialog (12.4).
+  const onSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && rows.length === 1 && rows[0] && debouncedQ === q.trim()) {
+      e.preventDefault();
+      setLaunch({ mode: "print", parts: [rows[0]] });
+    }
+  };
 
   const errorMessage = query.error ? (query.error instanceof ApiError ? query.error.message : SERVER_UNREACHABLE) : null;
 
@@ -82,6 +91,7 @@ export function PrintLabelsPage() {
         aria-label="Search part number, label name or description"
         value={q}
         onChange={(e) => setQ(e.target.value)}
+        onKeyDown={onSearchKey}
       />
       <div className="mt-4 flex gap-2" role="radiogroup" aria-label="Filter">
         {CHIPS.map((c) => (
@@ -124,12 +134,14 @@ export function PrintLabelsPage() {
                 <Th>Part number</Th>
                 <Th>Size</Th>
                 <Th>Label</Th>
-
+                <Th className="w-40">
+                  <span className="sr-only">Actions</span>
+                </Th>
               </tr>
             </thead>
             <tbody>
               {query.isPending ? (
-                <SkeletonRows columns={6} tall />
+                <SkeletonRows columns={7} tall />
               ) : (
                 rows.map((p) => (
                   <Tr key={p.id} tall selected={selected.has(p.id)}>
@@ -150,7 +162,9 @@ export function PrintLabelsPage() {
                     <Td>
                       <FreshnessBadge state={p.label_state} />
                     </Td>
-
+                    <Td className="text-right">
+                      <PrintRowActions part={p} onLaunch={setLaunch} />
+                    </Td>
                   </Tr>
                 ))
               )}
@@ -165,6 +179,7 @@ export function PrintLabelsPage() {
         <div className="fixed right-0 bottom-0 left-60 z-10 border-t border-border bg-surface px-8 py-3 shadow-dropdown">
           <div className="flex max-w-[1440px] items-center gap-4">
             <span className="t-body-strong text-text">{selected.size} selected</span>
+            <Button onClick={() => setLaunch({ mode: "print", parts: [...selected.values()] })}>Print selected</Button>
 
             <Button variant="ghost" onClick={() => setSelected(new Map())}>
               Clear
@@ -173,6 +188,7 @@ export function PrintLabelsPage() {
         </div>
       )}
 
+      <PrintLaunchHost launch={launch} onClose={() => setLaunch(null)} onSwitch={setLaunch} />
     </Page>
   );
 }

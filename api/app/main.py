@@ -19,13 +19,17 @@ from app.errors import install_handlers
 from app.logging_setup import RequestLogMiddleware, configure_logging
 from app.models import PrintAgent
 from app.configs.router import router as configs_router
+from app.history.router import router as history_router
 from app.imports.router import router as imports_router
 from app.render.router import router as render_router
 from app.imports.service import expire_batches
 from app.parts.aliases import router as aliases_router
 from app.parts.custom_fields import router as custom_fields_router
 from app.parts.router import router as parts_router
+from app.printing.agent_router import expire_leases, queue_rendered
+from app.printing.agent_router import router as agent_router
 from app.printing.jobs import router as jobs_router
+from app.printing.print_router import router as print_router
 from app.printing.printers import router as printers_router
 from app.render.fonts import record_font_hashes
 from app.settings.router import router as settings_router
@@ -74,9 +78,10 @@ def create_app(database_url: str | None = None) -> FastAPI:
     install_handlers(app)
     for r in (health_router, setup_router, auth_router, users_router, settings_router, sizes_router,
               printers_router, jobs_router, custom_fields_router, parts_router, aliases_router, imports_router,
-              configs_router, render_router):
+              configs_router, render_router, print_router, agent_router, history_router):
         app.include_router(r, prefix=API_PREFIX)
-    scheduler.register(expire_batches)
+    for task in (expire_batches, expire_leases, queue_rendered):
+        scheduler.register(task)
     return app
 
 

@@ -3,6 +3,7 @@ import { LoginPage } from "../features/auth/LoginPage";
 import { SetupPage } from "../features/auth/SetupPage";
 import { ConfigEditorPage } from "../features/configure/ConfigEditorPage";
 import { ConfigureListPage } from "../features/configure/ConfigureListPage";
+import { HistoryPage } from "../features/history/HistoryPage";
 import { ImportPage } from "../features/import/ImportPage";
 import { PartsPage } from "../features/parts/PartsPage";
 import { PrintLabelsPage } from "../features/print/PrintLabelsPage";
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
           { path: "/", element: <Navigate to="/print" replace /> },
           { path: "/print", element: <PrintLabelsPage /> },
           { path: "/parts", element: <PartsPage /> },
+          { path: "/history", element: <HistoryPage /> },
           {
             element: <AdminOnly />,
             children: [

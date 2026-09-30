@@ -11,6 +11,8 @@ services:
       - /data/assets:uid=10001
     environment:
       PUBLIC_BASE_URL: https://localhost:9443
+  backup:
+    profiles: ["disabled"]  # no backups of the throwaway e2e database
   web:
     environment:
       HTTPS_PORT_HINT: "9443"

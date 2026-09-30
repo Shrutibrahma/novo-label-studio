@@ -47,7 +47,7 @@ export function LoginPage() {
         <BrandLogo className="h-14 self-center" />
         <div className="flex flex-col gap-1 border-t border-border pt-5">
           <h2 className="t-h2 text-text">Sign in</h2>
-          <p className="t-small text-text-muted">Novo Label Studio</p>
+          <p className="t-small text-text-muted">Novo Smart Labels</p>
         </div>
         <Field label="Username" htmlFor="username">
           <Input id="username" autoComplete="username" autoFocus value={username} onChange={(e) => setUsername(e.target.value)} />

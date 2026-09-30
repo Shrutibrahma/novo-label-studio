@@ -72,7 +72,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
                 await scheduler.stop(task)
             await dispose_engine()
 
-    app = FastAPI(title="Novo Label Studio API", version=APP_VERSION, lifespan=lifespan,
+    app = FastAPI(title="Novo Smart Labels API", version=APP_VERSION, lifespan=lifespan,
                   docs_url=f"{API_PREFIX}/docs", openapi_url=f"{API_PREFIX}/openapi.json", redoc_url=None)
     app.add_middleware(RequestLogMiddleware)
     install_handlers(app)

@@ -123,7 +123,7 @@ async def print_test_label(printer_id: uuid.UUID, request: Request, user: Admin,
                     select(LabelSize).where(LabelSize.name == DEFAULT_SIZE_NAME))).scalar_one()
     zone = request_zone(request)
     w, h = f"{float(size.width_in):g}", f"{float(size.height_in):g}"
-    lines = ["Novo Label Studio test", f"{printer.name} · {printer.dpi} dpi", f"{size.name} · {w} × {h} in",
+    lines = ["Novo Smart Labels test", f"{printer.name} · {printer.dpi} dpi", f"{size.name} · {w} × {h} in",
              format_display(now_utc(), zone), f"v{APP_VERSION}"]
     png = render_test_label(canvas_for(size.width_in, size.height_in, printer.print_width_in, printer.dpi), lines)
     job = PrintJob(printer_id=printer.id, kind="test", payload_zpl=job_payload([(png, 1)], printer_settings(printer)),

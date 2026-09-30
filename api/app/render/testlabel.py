@@ -1,5 +1,5 @@
 """Test label (spec 12.13): a border at the safe margin, a 1-inch ruler along the top and left with ticks
-every 0.1 in, and the lines "Novo Label Studio test", "{printer name} · {dpi} dpi", "{loaded size}",
+every 0.1 in, and the lines "Novo Smart Labels test", "{printer name} · {dpi} dpi", "{loaded size}",
 "{date time}", "v{app version}"."""
 
 from __future__ import annotations

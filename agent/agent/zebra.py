@@ -1,7 +1,7 @@
 """ZebraUsbPrinter: the real path to the ZQ630 Plus over USB (spec 8.2). Written to spec, untested until the
 printer arrives — see the hardware checks in README.md.
 
-Printing: OpenPrinter(AGENT_PRINTER_QUEUE) → StartDocPrinter("Label Studio job <id>", RAW) → StartPagePrinter →
+Printing: OpenPrinter(AGENT_PRINTER_QUEUE) → StartDocPrinter("Smart Labels job <id>", RAW) → StartPagePrinter →
 WritePrinter(bytes) → EndPagePrinter → EndDocPrinter → ClosePrinter.
 Status: GetPrinter(level 2).Status mapped per 8.2 step 4.
 [SPIKE] ~HS readback: the spooler is write-only, so readback opens the usbprint.sys device (Zebra VID 0A5F) directly.
@@ -72,7 +72,7 @@ class ZebraUsbPrinter:
         w = self._w
         h = w.OpenPrinter(self.queue)
         try:
-            w.StartDocPrinter(h, 1, (f"Label Studio job {job_id}", None, "RAW"))
+            w.StartDocPrinter(h, 1, (f"Smart Labels job {job_id}", None, "RAW"))
             try:
                 w.StartPagePrinter(h)
                 written = w.WritePrinter(h, payload)

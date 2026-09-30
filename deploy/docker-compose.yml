@@ -1,4 +1,4 @@
-# Novo Label Studio — db, api, web (spec section 4). Start with scripts/up.ps1.
+# Novo Smart Labels — db, api, web (spec section 4). Start with scripts/up.ps1.
 name: labelstudio
 
 services:

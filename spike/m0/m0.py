@@ -427,7 +427,7 @@ def cmd_print(args) -> None:
     if not res.fits and not args.force:
         sys.exit("Not printing: label doesn't fit (use --force to print anyway).")
     before = spooler_status(args.queue)
-    job = f"Label Studio job {uuid.uuid4()}"
+    job = f"Smart Labels job {uuid.uuid4()}"
     t0 = time.perf_counter()
     written = send_raw(args.queue, zpl, job)
     rec = {"queue": args.queue, "doc": job, "bytes": len(zpl), "written": written,
@@ -475,7 +475,7 @@ def cmd_hs(args) -> None:
 
 
 def cmd_calibrate(args) -> None:
-    written = send_raw(args.queue, b"~JC\r\n", "Label Studio calibrate")
+    written = send_raw(args.queue, b"~JC\r\n", "Smart Labels calibrate")
     log_result("calibrate", {"queue": args.queue, "written": written})
 
 

@@ -1,6 +1,6 @@
 # Build progress
 
-Novo Label Studio v1, built milestone by milestone from `SPEC.md` + `schema.sql` (spec section 17).
+Novo Smart Labels v1, built milestone by milestone from `SPEC.md` + `schema.sql` (spec section 17).
 
 | Milestone | State |
 | --- | --- |

@@ -263,3 +263,7 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     each, a role legend (Main line / Second line / Detail), a live-preview card with a Ready/Needs-a-fix chip,
     stronger selected state on segmented controls, fixed the collapsed Caption input. Settings: icon + hint per
     section, a header per page and a live sidebar preview of the company name. Styling only.
+91. **Renamed to "Novo Smart Labels" (D21, owner's request, 2026-09-30).** Every user-facing string: sidebar, sign-in,
+    setup, tab titles, the printer test label, agent/service display names and the spooler job name, README and
+    scripts. Internal identifiers (Compose project `labelstudio`, database, package names, repository name) are
+    unchanged so existing data, volumes and the agent install keep working. Entries above keep the old name.

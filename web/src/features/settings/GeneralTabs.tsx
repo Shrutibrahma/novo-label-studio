@@ -68,7 +68,7 @@ function SidebarPreview({ name }: { name: string }) {
         <div className="flex items-center gap-2 px-1">
           <Tag size={16} strokeWidth={1.75} className="shrink-0 text-nav-text" />
           <div className="flex min-w-0 flex-col">
-            <span className="text-[15px] leading-5 font-semibold text-white">Novo Label Studio</span>
+            <span className="text-[15px] leading-5 font-semibold text-white">Novo Smart Labels</span>
             <span className="truncate t-caption text-nav-text">{name.trim() || "Your company"}</span>
           </div>
         </div>

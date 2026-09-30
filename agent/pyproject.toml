@@ -1,7 +1,7 @@
 [project]
 name = "label-studio-agent"
 version = "1.0.0"
-description = "Novo Label Studio print agent (Windows): pulls jobs from the API and writes RAW ZPL to the printer"
+description = "Novo Smart Labels print agent (Windows): pulls jobs from the API and writes RAW ZPL to the printer"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "httpx",

@@ -78,7 +78,7 @@ These decisions are final for v1. Changing one requires editing this table first
 | D18 | Direct-thermal synthetic (polypropylene) media | ZQ630 Plus is direct thermal only; paper fades |
 | D19 | UI: light theme content, fixed dark sidebar, dark hero on Import (and the sign-in/setup backdrop). Colours follow the Novo Lean Solutions brand (logo green #487037, warm grey #847F72); originally dark navy, changed 2026-09-30 at the owner's request | Matches the brief and the company brand |
 | D20 | Icons: lucide-react only | One consistent set |
-| D21 | Working product name: "Novo Label Studio" (configurable company name in Settings) | Branding placeholder |
+| D21 | Product name: "Novo Smart Labels" (was the working name "Novo Label Studio"; renamed 2026-09-30 at the owner's request). Company name configurable in Settings | The owner's choice |
 
 ## 3. Hardware
 

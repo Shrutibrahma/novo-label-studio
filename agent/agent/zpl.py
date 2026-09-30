@@ -72,7 +72,7 @@ def write_pngs(zpl: bytes, out_dir: Path, stem: str) -> list[Path]:
 
 
 def cli(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="zpl2png", description="Decode Label Studio ZPL (^GFA) back to PNG images.")
+    p = argparse.ArgumentParser(prog="zpl2png", description="Decode Smart Labels ZPL (^GFA) back to PNG images.")
     p.add_argument("file", type=Path)
     p.add_argument("--out", type=Path, default=None, help="output folder (default: next to the .zpl file)")
     args = p.parse_args(argv)

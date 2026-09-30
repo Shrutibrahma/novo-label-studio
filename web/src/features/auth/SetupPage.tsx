@@ -96,7 +96,7 @@ export function SetupPage() {
       <div className="flex w-[640px] flex-col rounded-[12px] border border-border bg-surface shadow-dialog">
         <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
           <BrandLogo className="h-10" />
-          <span className="t-h3 text-text">Novo Label Studio</span>
+          <span className="t-h3 text-text">Novo Smart Labels</span>
         </div>
         <ol className="flex gap-6 border-b border-border px-6 py-3" aria-label="Setup steps">
           {STEPS.map((s, i) => (
@@ -164,7 +164,7 @@ export function SetupPage() {
                   Copy
                 </Button>
               </div>
-              <p className="t-body text-text-secondary">Install the Label Studio Agent on the laptop connected to the ZQ630 Plus, then paste this token when asked.</p>
+              <p className="t-body text-text-secondary">Install the Smart Labels Agent on the laptop connected to the ZQ630 Plus, then paste this token when asked.</p>
               <div className="flex items-center justify-between gap-4">
                 {connected && printer ? (
                   <span className="inline-flex items-center gap-2 t-body text-success">

@@ -13,7 +13,7 @@ test("reprint a damaged label from History", async ({ page }) => {
   const serial: string = (await res.json()).items.find((r: { serial: string | null }) => r.serial).serial;
 
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "History" }).click();
-  await expect(page).toHaveTitle("History · Novo Label Studio");
+  await expect(page).toHaveTitle("History · Novo Smart Labels");
   await page.getByPlaceholder("Search serial, part number or label name").fill(serial);
   const drawer = page.getByRole("dialog", { name: "Printed label" });
   await expect(drawer).toBeVisible();

@@ -5,7 +5,7 @@ import { ADMIN, agentJobFiles, OPERATOR, saveState, signIn, signOut, startAgent 
 test("first install: setup wizard, sign-in errors, roles", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/setup$/);
-  await expect(page).toHaveTitle("Setup · Novo Label Studio");
+  await expect(page).toHaveTitle("Setup · Novo Smart Labels");
 
   await expect(page.getByRole("heading", { name: "Create the admin account" })).toBeVisible();
   await page.getByLabel("Display name").fill(ADMIN.display_name);
@@ -27,7 +27,7 @@ test("first install: setup wizard, sign-in errors, roles", async ({ page }) => {
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(page.getByRole("heading", { name: "Connect the printer" })).toBeVisible();
-  await expect(page.getByText("Install the Label Studio Agent on the laptop connected to the ZQ630 Plus, then paste this token when asked.")).toBeVisible();
+  await expect(page.getByText("Install the Smart Labels Agent on the laptop connected to the ZQ630 Plus, then paste this token when asked.")).toBeVisible();
   await expect(page.getByText("Waiting for the agent…")).toBeVisible();
   const token = (await page.getByTestId("agent-token").textContent())?.trim() ?? "";
   expect(token.length).toBeGreaterThan(40);
@@ -47,7 +47,7 @@ test("first install: setup wizard, sign-in errors, roles", async ({ page }) => {
   await expect(page.getByText("Your parts list is empty")).toBeVisible();
 
   // Shell: brand, company name, admin navigation, tab title.
-  await expect(page.getByText("Novo Label Studio").first()).toBeVisible();
+  await expect(page.getByText("Novo Smart Labels").first()).toBeVisible();
   for (const item of ["Print Labels", "Parts", "Configure", "History", "Settings"]) {
     await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: item })).toBeVisible();
   }
@@ -63,7 +63,7 @@ test("first install: setup wizard, sign-in errors, roles", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText("Username or password is incorrect.")).toBeVisible();
   await signIn(page, ADMIN);
-  await expect(page).toHaveTitle("Print Labels · Novo Label Studio");
+  await expect(page).toHaveTitle("Print Labels · Novo Smart Labels");
   await expect(page.getByRole("heading", { level: 1, name: "Print Labels" })).toBeVisible();
 
   // Create an operator and check the operator's navigation (12.1).

@@ -98,7 +98,7 @@ function Sidebar() {
         <div className="flex min-w-0 items-center gap-2 px-1">
           <Tag size={16} strokeWidth={1.75} className="shrink-0 text-nav-text" aria-hidden />
           <div className="flex min-w-0 flex-col">
-            <span className="text-[15px] leading-5 font-semibold text-white">Novo Label Studio</span>
+            <span className="text-[15px] leading-5 font-semibold text-white">Novo Smart Labels</span>
             {settings.data?.company_name && <span className="truncate t-caption text-nav-text">{settings.data.company_name}</span>}
           </div>
         </div>

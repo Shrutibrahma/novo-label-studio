@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 Assert-Docker
 Initialize-EnvFile
 
-Write-Host "Building and starting Novo Label Studio (db, api, web)..."
+Write-Host "Building and starting Novo Smart Labels (db, api, web)..."
 Invoke-Compose up -d --build
 
 $port = Get-HttpsPort
@@ -17,5 +17,5 @@ if (-not (Wait-Healthy $url)) {
 }
 
 Write-Host ""
-Write-Host "Novo Label Studio is running at $url" -ForegroundColor Green
+Write-Host "Novo Smart Labels is running at $url" -ForegroundColor Green
 Write-Host "The certificate is self-signed; your browser will ask you to accept it the first time."

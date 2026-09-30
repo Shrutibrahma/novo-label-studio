@@ -26,7 +26,7 @@ test("parts, custom field, and label-name search", async ({ page }) => {
 
   // Parts → Add part.
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Parts" }).click();
-  await expect(page).toHaveTitle("Parts · Novo Label Studio");
+  await expect(page).toHaveTitle("Parts · Novo Smart Labels");
   await page.getByRole("button", { name: "Add part" }).click();
   const dialog = page.getByRole("dialog", { name: "Add part" });
   await dialog.getByLabel("Part number").fill("NP-10421");

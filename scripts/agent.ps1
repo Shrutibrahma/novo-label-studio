@@ -1,4 +1,4 @@
-# Starts the Label Studio print agent on this laptop.
+# Starts the Smart Labels print agent on this laptop.
 #   scripts/agent.ps1                          simulated printer (default): writes ZPL + PNGs to ./agent-output
 #   scripts/agent.ps1 -Mode usb                the real ZQ630 Plus through the Windows print queue
 #   scripts/agent.ps1 -Token <token>           the agent token from setup / Settings -> Printers (saved for next time)

@@ -27,7 +27,7 @@ Copy-Item $exe $installDir -Force
 $target = Join-Path $installDir 'labelstudio-agent.exe'
 
 & $Nssm install $ServiceName $target run
-& $Nssm set $ServiceName DisplayName "Label Studio print agent"
+& $Nssm set $ServiceName DisplayName "Smart Labels print agent"
 & $Nssm set $ServiceName Start SERVICE_AUTO_START
 $envs = @("AGENT_TOKEN=$Token", "API_BASE_URL=$ApiBaseUrl", "AGENT_PRINTER_MODE=usb", "AGENT_PRINTER_QUEUE=$Queue",
           "AGENT_POLL_SECONDS=1")

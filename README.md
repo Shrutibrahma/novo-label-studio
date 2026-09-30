@@ -1,4 +1,4 @@
-# Novo Label Studio
+# Novo Smart Labels
 
 Import your parts once, configure what the label shows, then find any part and print the right label in
 seconds — on a Zebra ZQ630 Plus. Built from [`SPEC.md`](SPEC.md) and [`schema.sql`](schema.sql).

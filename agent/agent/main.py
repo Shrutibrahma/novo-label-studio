@@ -1,4 +1,4 @@
-"""Label Studio print agent (spec 8.2).
+"""Smart Labels print agent (spec 8.2).
 
     labelstudio-agent run                  # poll the API and print (mode from AGENT_PRINTER_MODE, default simulated)
     labelstudio-agent sim-status offline   # force the running simulated printer's status (ready, offline, ...)

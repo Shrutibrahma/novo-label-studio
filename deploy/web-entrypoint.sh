@@ -12,7 +12,7 @@ if [ ! -s "$CERT" ] || [ ! -s "$KEY" ]; then
   SAN="DNS:localhost,DNS:labels.local,IP:127.0.0.1"
   if [ -n "${EXTRA_SAN:-}" ]; then SAN="$SAN,$EXTRA_SAN"; fi
   openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 825 \
-    -keyout "$KEY" -out "$CERT" -subj "/CN=Novo Label Studio" \
+    -keyout "$KEY" -out "$CERT" -subj "/CN=Novo Smart Labels" \
     -addext "subjectAltName=$SAN" \
     -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
     -addext "keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign" \

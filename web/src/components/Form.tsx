@@ -195,7 +195,7 @@ export function SegmentedControl<T extends string>({
             aria-checked={selected}
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
-            className={`h-8 rounded-[4px] px-3 t-button transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:text-text-muted ${selected ? "bg-primary-subtle text-primary" : "text-text-secondary hover:bg-hover-fill"}`}
+            className={`h-8 rounded-[4px] px-3 t-button transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:text-text-muted ${selected ? "bg-primary text-white shadow-card" : "text-text-secondary hover:bg-hover-fill"}`}
           >
             {o.label}
           </button>

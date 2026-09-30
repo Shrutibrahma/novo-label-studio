@@ -11,7 +11,7 @@ from functools import lru_cache
 from typing import Any
 
 import segno
-from PIL import ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from app.configs.spec import LabelSpec, ManualBox, SpecField
 from app.errors import message_for
@@ -19,6 +19,7 @@ from app.render.canvas import SAFE_MARGIN_DOTS, canvas_for, new_canvas, png_byte
 from app.render.fonts import load_font
 
 QR_GAP = 16
+IMAGE_GAP = 16
 MAX_QR_PAYLOAD = 120
 STEP_PT = 0.5
 WRAP_BREAKS = (" ", "-", "/")
@@ -329,8 +330,30 @@ def _draw_qr(draw: ImageDraw.ImageDraw, payload: str, x0: int, y0: int, side: in
     return None
 
 
+# ---------------------------------------------------------------- picture
+def picture_bits(picture: Image.Image, box_w: int, box_h: int) -> Image.Image:
+    """The part's picture as 1-bit dots fitting box_w × box_h: flattened onto white, greyscale, contrast
+    stretched, scaled to fit (aspect kept) and Floyd–Steinberg dithered, since the printer has no grey."""
+    img = picture
+    if img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info):
+        rgba = img.convert("RGBA")
+        white = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+        img = Image.alpha_composite(white, rgba)
+    grey = ImageOps.autocontrast(img.convert("L"), cutoff=1)
+    fitted = ImageOps.contain(grey, (max(1, box_w), max(1, box_h)), Image.Resampling.LANCZOS)
+    return fitted.convert("1", dither=Image.Dither.FLOYDSTEINBERG)
+
+
+def _place_picture(img: Image.Image, picture: Image.Image, x: int, y: int, w: int, h: int) -> None:
+    bits = picture_bits(picture, w, h)
+    img.paste(bits, (x + (w - bits.width) // 2, y + (h - bits.height) // 2))
+
+
 # ---------------------------------------------------------------- render
-def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, printer: RenderPrinter) -> RenderResult:
+def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, printer: RenderPrinter,
+           picture: Image.Image | None = None) -> RenderResult:
+    """`picture` is the part's image when the snapshot prints one (generated.image_sha256); a snapshot that
+    names a picture but gets none renders with a LABEL_IMAGE_MISSING warning, so it can't be printed."""
     spec, style = config.spec, config.spec.style
     canvas = canvas_for(size.width_in, size.height_in, printer.print_width_in, printer.dpi)
     img = new_canvas(canvas)
@@ -373,6 +396,22 @@ def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, pri
             code = _draw_qr(draw, payload, qx, qy, side)
             if code:
                 warn(code)
+
+    # The picture takes a square beside the text (wide labels) or a band above it (tall labels).
+    if snapshot.get("generated", {}).get("image_sha256") and style.image_position != "none":
+        if picture is None:
+            warn("LABEL_IMAGE_MISSING")
+        elif H >= W * 5 // 4:  # tall labels (4 × 6 and portrait custom sizes): a band above the text
+            band = min(th * 2 // 5, tw)
+            _place_picture(img, picture, tx, ty, tw, band)
+            ty, th = ty + band + IMAGE_GAP, th - band - IMAGE_GAP
+        else:
+            side = min(th, tw * 2 // 5)
+            ix = tx if style.image_position == "left" else tx + tw - side
+            _place_picture(img, picture, ix, ty + (th - side) // 2, side, side)
+            if style.image_position == "left":
+                tx += side + IMAGE_GAP
+            tw -= side + IMAGE_GAP
 
     for key in required_missing(spec, snapshot):
         warn("REQUIRED_VALUE_MISSING", f"manual.{key}")

@@ -263,7 +263,8 @@ async def label_detail(label_id: uuid.UUID, _: AnyUser, db: DB) -> LabelDetail:
     labels = field_labels(spec, ctx_labels) | CORE_LABELS
     fields: list[SnapshotField] = []
     for k, v in label.snapshot.get("part", {}).items():
-        fields.append(SnapshotField(key=k, label=labels.get(k, k), value=_display(v)))
+        shown = "Printed" if k == "image_asset_id" else _display(v)
+        fields.append(SnapshotField(key=k, label=labels.get(k, k), value=shown))
     for k, v in label.snapshot.get("manual", {}).items():
         mdef = spec.manual(k)
         noun = getattr(mdef, "noun", None)

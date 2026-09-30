@@ -43,6 +43,8 @@ ERRORS: dict[str, tuple[int, str]] = {
     "TEXT_TOO_LONG": (422, "\"{Field}\" is too long for this label size. Choose a larger size or a smaller text size."),
     "CONTENT_TOO_TALL": (422, "Too much information for this label size. Remove a field or choose a larger size."),
     "QR_TOO_SMALL": (422, "The QR code would be too small to scan. Choose a larger size or move fields."),
+    "LABEL_IMAGE_MISSING": (422, "This part's picture can't be found. Upload it again on the part."),
+    "CONFIG_IMAGE_QR_SAME_SIDE": (422, "The picture and the QR code can't be on the same side."),
     "QR_PAYLOAD_TOO_LONG": (422, "This part number is too long for the QR code."),
     "REQUIRED_VALUE_MISSING": (422, "Enter {Field} to print."),
     "PRINTER_OFFLINE": (409, "The printer is offline. Check the USB cable and that the printer is on."),

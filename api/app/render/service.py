@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
+
+from PIL import Image, UnidentifiedImageError
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.configs.spec import LabelSpec, parse_spec
 from app.errors import ApiError
-from app.models import CustomFieldDef, LabelSize, Part, PartAlias, Printer, SerialSequence
+from app.models import Asset, CustomFieldDef, LabelSize, Part, PartAlias, Printer, SerialSequence
 from app.render.engine import RenderConfig, RenderPrinter, RenderResult, RenderSize, render
 from app.render.snapshot import build_snapshot, clean_manual, field_labels, part_field_values
 
@@ -55,16 +59,40 @@ async def label_name_of(db: AsyncSession, part_id: uuid.UUID) -> str | None:
                                                            PartAlias.is_label_name.is_(True)))).scalar_one_or_none()
 
 
-def part_values(part: Part, label_name: str | None) -> dict[str, Any]:
+async def image_of(db: AsyncSession, part: Part) -> tuple[str, str] | None:
+    """(asset id, sha256 hex) of the part's picture."""
+    if part.image_asset_id is None:
+        return None
+    asset = await db.get(Asset, part.image_asset_id)
+    return (str(asset.id), asset.sha256.hex()) if asset else None
+
+
+def part_values(part: Part, label_name: str | None, image: tuple[str, str] | None = None) -> dict[str, Any]:
     return part_field_values(part.part_number, part.part_name, part.description, part.revision,
-                             part.custom_data or {}, label_name)
+                             part.custom_data or {}, label_name, image)
+
+
+@lru_cache(maxsize=64)
+def _load_picture(sha_hex: str) -> Image.Image | None:
+    path = get_settings().asset_dir / sha_hex[:2] / f"{sha_hex}.png"
+    try:
+        with Image.open(path) as img:
+            img.load()
+            return img.copy()
+    except (OSError, UnidentifiedImageError):
+        return None
+
+
+def snapshot_picture(snapshot: dict[str, Any]) -> Image.Image | None:
+    sha = snapshot.get("generated", {}).get("image_sha256")
+    return _load_picture(sha) if isinstance(sha, str) and len(sha) == 64 else None
 
 
 def render_snapshot(snapshot: dict[str, Any], spec: LabelSpec, qr_mode: str, size: LabelSize, printer: Printer,
                     labels: dict[str, str]) -> RenderResult:
     return render(snapshot, RenderConfig(spec=spec, qr_mode=qr_mode, field_labels=labels),
                   RenderSize(width_in=size.width_in, height_in=size.height_in),
-                  RenderPrinter(dpi=printer.dpi, print_width_in=printer.print_width_in))
+                  RenderPrinter(dpi=printer.dpi, print_width_in=printer.print_width_in), snapshot_picture(snapshot))
 
 
 async def render_part(db: AsyncSession, ctx: RenderContext, part: Part, cfg: ConfigLike,
@@ -76,6 +104,7 @@ async def render_part(db: AsyncSession, ctx: RenderContext, part: Part, cfg: Con
         raise ApiError("NOT_FOUND")
     labels = field_labels(spec, ctx.custom_labels)
     manual = clean_manual(spec, manual_values, labels)
-    snapshot = build_snapshot(spec, cfg.qr_mode, part_values(part, await label_name_of(db, part.id)),
+    snapshot = build_snapshot(spec, cfg.qr_mode, part_values(part, await label_name_of(db, part.id),
+                                                             await image_of(db, part)),
                               ctx.custom_keys, manual, serial if cfg.serial_mode == "required" else None, print_date)
     return render_snapshot(snapshot, spec, cfg.qr_mode, size, ctx.printer, labels), snapshot, spec, size

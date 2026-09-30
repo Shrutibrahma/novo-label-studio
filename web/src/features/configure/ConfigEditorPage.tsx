@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleCheck, TriangleAlert } from "lucide-react";
+import { CircleCheck, Eye, Image as ImageIcon, LayoutList, Palette, QrCode, Ruler, TextCursorInput, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useNavigate, useParams } from "react-router";
 import { usePage } from "../../app/page";
@@ -10,7 +10,7 @@ import { ConfirmDialog } from "../../components/Overlay";
 import { api, ApiError } from "../../lib/api";
 import { qk, useSettings, useSizes } from "../../lib/queries";
 import { useCustomFields, usePart, type LabelStyle } from "../../lib/parts";
-import { FieldsSection, ManualSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
+import { FieldsSection, ManualSection, PictureSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
 import { PartPicker, type PickedPart } from "./PartPicker";
 import { useFirstActivePart } from "./ConfigureListPage";
 import { toDraft, type ConfigOut, type Draft } from "./types";
@@ -102,7 +102,12 @@ export function ConfigEditorPage() {
   return (
     <div className="flex max-w-[1440px] flex-col">
       <div className="flex items-center gap-3 border-b border-border bg-surface px-8 py-4">
-        <h2 className="flex-1 t-h2 text-text">{title}</h2>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h2 className="t-h2 text-text">{title}</h2>
+          <p className="t-small text-text-muted">
+            {dirty ? "Unsaved changes. Publish to use them for printing; older labels keep their version." : `Version ${nextVersion - 1} is live. Change anything below and watch the preview.`}
+          </p>
+        </div>
         <Button variant="ghost" onClick={() => navigate("/configure")}>
           Cancel
         </Button>
@@ -116,29 +121,49 @@ export function ConfigEditorPage() {
         </div>
       )}
       <div className="flex items-start">
-        <div className="w-[440px] shrink-0 overflow-y-auto border-r border-border bg-surface" style={{ maxHeight: "calc(100vh - 56px - 69px)" }}>
-          <Section title="Size">
+        <div className="flex w-[460px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-border p-4" style={{ maxHeight: "calc(100vh - 56px - 77px)" }}>
+          <Section title="Size" step={1} icon={Ruler} hint="The label roll loaded in the printer">
             <SizeSection sizes={(sizes.data ?? []).filter((s) => s.active)} value={draft.label_size_id} onChange={(id) => setDraft({ ...draft, label_size_id: id })} />
           </Section>
-          <Section title="What's on the label">
+          <Section title="What's on the label" step={2} icon={LayoutList} hint="Pick the part details to print, biggest first">
             <FieldsSection draft={draft} custom={custom.data ?? []} onFields={(fields) => setDraft({ ...draft, spec: { ...draft.spec, fields } })} />
           </Section>
-          <Section title="Print-time fields">
-            <ManualSection draft={draft} onChange={(manual_fields, fields) => setDraft({ ...draft, spec: { ...draft.spec, manual_fields, fields } })} />
+          <Section title="Picture" step={3} icon={ImageIcon} hint="Put the part's photo on the label">
+            <PictureSection draft={draft} onChange={setStyle} />
           </Section>
-          <Section title="QR code & serial">
+          <Section title="QR code & serial" step={4} icon={QrCode} hint="Scannable code and a unique number per label">
             <QrSection
               draft={draft}
               onChange={(patch, style) => setDraft({ ...draft, ...patch, spec: style ? { ...draft.spec, style: { ...draft.spec.style, ...style } } : draft.spec })}
             />
           </Section>
-          <Section title="Style">
+          <Section title="Style" step={5} icon={Palette} hint="Font, weight, size and spacing">
             <StyleSection style={draft.spec.style} fonts={settings.data?.fonts_allowed ?? ["inter", "roboto_condensed", "atkinson"]} onChange={setStyle} />
           </Section>
+          <Section title="Print-time fields" step={6} icon={TextCursorInput} hint="Typed in when printing, e.g. lot number or BOX 1/3">
+            <ManualSection draft={draft} onChange={(manual_fields, fields) => setDraft({ ...draft, spec: { ...draft.spec, manual_fields, fields } })} />
+          </Section>
         </div>
-        <div className="sticky top-14 flex min-w-0 flex-1 flex-col gap-4 p-8">
-          <PartPicker value={previewPart} onChange={setPreviewPart} />
-          <LabelPreview result={preview.data} loading={preview.isFetching} maxHeight={520} />
+        <div className="sticky top-14 flex min-w-0 flex-1 flex-col gap-4 p-6">
+          <div className="flex flex-col gap-4 rounded-[12px] border border-border bg-surface p-5 shadow-card">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary-subtle text-primary">
+                <Eye size={16} strokeWidth={1.75} aria-hidden />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="t-h3 text-text">Live preview</span>
+                <span className="t-small text-text-muted">Exactly the dots the printer will print</span>
+              </div>
+              {preview.data && (
+                <span className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 t-caption ${fits ? "bg-success-bg text-success" : "bg-warning-bg text-warning"}`}>
+                  {fits ? <CircleCheck size={14} strokeWidth={1.75} aria-hidden /> : <TriangleAlert size={14} strokeWidth={1.75} aria-hidden />}
+                  {fits ? "Ready to publish" : "Needs a fix"}
+                </span>
+              )}
+            </div>
+            <PartPicker value={previewPart} onChange={setPreviewPart} />
+          </div>
+          <LabelPreview result={preview.data} loading={preview.isFetching} maxHeight={480} />
           {preview.error ? (
             <Banner tone="danger">{preview.error instanceof ApiError ? preview.error.message : String(preview.error)}</Banner>
           ) : fits ? (

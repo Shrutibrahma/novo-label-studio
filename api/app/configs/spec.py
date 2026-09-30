@@ -66,6 +66,8 @@ class Style(_Strict):
     emphasis: Literal["small", "medium", "large"] = "medium"
     spacing: Literal["compact", "standard", "spacious"] = "standard"
     qr_position: Literal["left", "right"] = "right"
+    # The part's picture (dithered to 1-bit): beside the text on wide labels, above it on tall ones.
+    image_position: Literal["none", "left", "right"] = "none"
 
 
 class LabelSpec(_Strict):
@@ -117,3 +119,5 @@ def validate_spec(spec: LabelSpec, custom_keys: set[str], qr_mode: str, serial_m
         raise ApiError("CONFIG_QR_NEEDS_SERIAL")
     if spec.style.font not in allowed_fonts:
         raise ApiError("CONFIG_INVALID")
+    if qr_mode != "none" and spec.style.image_position == spec.style.qr_position:
+        raise ApiError("CONFIG_IMAGE_QR_SAME_SIDE")

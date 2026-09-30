@@ -26,7 +26,7 @@ from app.models import LabelConfig, LabelGroup, LabelSize, Part, Printer, Printe
 from app.printing.jobs import JobOut, assert_printer_ready, job_out, printer_settings, queue_jobs
 from app.render.canvas import sha256
 from app.render.engine import RenderResult
-from app.render.service import label_name_of, part_values, preview_serial, render_context, render_snapshot
+from app.render.service import image_of, label_name_of, part_values, preview_serial, render_context, render_snapshot
 from app.render.snapshot import build_snapshot, clean_manual, field_labels
 from app.render.zpl import job_payload
 from app.timeutil import local_today, request_zone
@@ -186,7 +186,7 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
 
     # Refuse before allocating anything if a label can't fit (the placeholder serial is the widest possible).
     for p in planned:
-        values = part_values(p.part, await label_name_of(db, p.part.id))
+        values = part_values(p.part, await label_name_of(db, p.part.id), await image_of(db, p.part))
         labels = field_labels(p.spec, ctx.custom_labels)
         box = p.spec.box_field()
         manual = dict(p.manual)
@@ -227,7 +227,7 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
         if p.item.group is not None and box is not None:
             p.group = await resolve_group(db, p, box, user.id)
         group_ids.append(str(p.group.id) if p.group else None)
-        values = part_values(p.part, await label_name_of(db, p.part.id))
+        values = part_values(p.part, await label_name_of(db, p.part.id), await image_of(db, p.part))
         labels = field_labels(p.spec, ctx.custom_labels)
         for index, serial in zip(p.indexes, serials, strict=True):
             manual = dict(p.manual)

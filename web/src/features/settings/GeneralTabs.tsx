@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Lock } from "lucide-react";
+import { Lock, Tag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Display";
@@ -32,7 +32,8 @@ export function GeneralTab() {
   useEffect(() => setName(settings.data?.company_name ?? ""), [settings.data?.company_name]);
   const save = useSaveSettings(setErrors);
   return (
-    <Card className="max-w-[560px]">
+    <div className="flex flex-wrap items-start gap-6">
+    <Card className="w-full max-w-[560px]">
       <form
         className="flex flex-col gap-4"
         onSubmit={(e) => {
@@ -50,6 +51,29 @@ export function GeneralTab() {
         </div>
       </form>
     </Card>
+    <SidebarPreview name={name} />
+    </div>
+  );
+}
+
+/** How the company name appears at the top of the sidebar, updating as you type. */
+function SidebarPreview({ name }: { name: string }) {
+  return (
+    <div className="flex w-[260px] flex-col gap-2">
+      <span className="t-caption text-text-muted uppercase">Preview</span>
+      <div className="flex flex-col gap-3 rounded-[12px] bg-nav-bg bg-[length:280px_280px] p-4 shadow-card" style={{ backgroundImage: "url(/art/pattern.svg)" }} aria-hidden>
+        <div className="rounded-[8px] bg-surface px-3 py-2">
+          <img src="/brand/novo-lean-solutions.svg" alt="" className="block h-9 w-auto" />
+        </div>
+        <div className="flex items-center gap-2 px-1">
+          <Tag size={16} strokeWidth={1.75} className="shrink-0 text-nav-text" />
+          <div className="flex min-w-0 flex-col">
+            <span className="text-[15px] leading-5 font-semibold text-white">Novo Label Studio</span>
+            <span className="truncate t-caption text-nav-text">{name.trim() || "Your company"}</span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

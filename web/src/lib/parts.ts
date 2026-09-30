@@ -110,6 +110,8 @@ export interface LabelStyle {
   emphasis: "small" | "medium" | "large";
   spacing: "compact" | "standard" | "spacious";
   qr_position: "left" | "right";
+  /** Older saved configs don't have it: treated as "none". */
+  image_position?: "none" | "left" | "right";
 }
 
 export interface LabelSpec {

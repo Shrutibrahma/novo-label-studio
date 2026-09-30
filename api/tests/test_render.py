@@ -256,3 +256,63 @@ def test_overhang_bound_holds_for_bundled_fonts() -> None:
 @pytest.mark.skip(reason="needs hardware")
 def test_a1_preview_equals_print_on_all_presets() -> None:
     """A1: scan the printed label at 600 dpi, overlay it on the preview PNG: no element off by more than 2 dots."""
+
+
+# ---------------------------------------------------------------- part picture
+def photo() -> Image.Image:
+    """A grey gradient with a dark disc on white, like a part photo."""
+    img = Image.new("RGB", (300, 200), "white")
+    for x in range(300):
+        for y in range(200):
+            if (x - 150) ** 2 + (y - 100) ** 2 < 80 ** 2:
+                img.putpixel((x, y), (x % 256 // 2, x % 256 // 2, x % 256 // 2))
+    return img
+
+
+def with_picture(base: dict[str, Any]) -> dict[str, Any]:
+    snap = json.loads(json.dumps(base))
+    snap["part"]["image_asset_id"] = "00000000-0000-0000-0000-000000000001"
+    snap["generated"]["image_sha256"] = "ab" * 32
+    return snap
+
+
+def dark(png: bytes, box: tuple[int, int, int, int]) -> int:
+    img = Image.open(io.BytesIO(png)).crop(box)
+    return img.convert("L").histogram()[0]
+
+
+def test_picture_sits_beside_the_text_on_wide_labels() -> None:
+    size = SIZES["large"]
+    s = spec(image_position="left")
+    kw = dict(snapshot=with_picture(SNAPSHOT))
+    plain = run(spec(), size)
+    left = render(kw["snapshot"], RenderConfig(spec=s, qr_mode="none", field_labels=LABELS),
+                  RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER, photo())
+    assert left.fits and Image.open(io.BytesIO(left.png)).mode == "1"
+    w, h = left.width_dots, left.height_dots
+    assert dark(left.png, (0, 0, w * 2 // 5, h)) > dark(plain.png, (0, 0, w * 2 // 5, h)) + 500  # picture drawn left
+    again = render(kw["snapshot"], RenderConfig(spec=s, qr_mode="none", field_labels=LABELS),
+                   RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER, photo())
+    assert again.png == left.png  # deterministic
+    # With a QR on the right, the picture on the left still fits.
+    both = render(with_picture(SNAPSHOT), RenderConfig(spec=s, qr_mode="serial", field_labels=LABELS),
+                  RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER, photo())
+    assert both.fits, both.warnings
+
+
+def test_picture_goes_above_the_text_on_tall_labels() -> None:
+    size = SIZES["tall"]
+    r = render(with_picture(SNAPSHOT), RenderConfig(spec=spec(image_position="right"), qr_mode="none",
+                                                    field_labels=LABELS),
+               RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER, photo())
+    assert r.fits
+    assert dark(r.png, (0, 0, r.width_dots, r.height_dots // 3)) > 1000  # the band at the top
+
+
+def test_picture_off_or_missing() -> None:
+    size = SIZES["large"]
+    # Position "none": a snapshot without the picture renders exactly like before (goldens unaffected).
+    assert run(spec(image_position="none"), size).png == run(spec(), size).png
+    # The snapshot names a picture but its file is gone: a warning, so the label can't be printed.
+    missing = run(spec(image_position="left"), size, snapshot=with_picture(SNAPSHOT))
+    assert not missing.fits and [w.code for w in missing.warnings] == ["LABEL_IMAGE_MISSING"]

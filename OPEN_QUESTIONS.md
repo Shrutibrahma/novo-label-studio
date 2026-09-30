@@ -249,3 +249,17 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     keeps the current image; a text value in the image column, or an unreadable picture, makes the row invalid.
     Assets staged by a discarded import stay on disk (content-addressed, small). No schema change. Also added
     "NOVO P/N" / "P/N" as part-number header synonyms.
+89. **Part picture on the label (owner's request, 2026-09-30).** New style option `image_position`
+    (`none` default | `left` | `right`) in the label spec; older configs without it mean `none`, so existing
+    labels and all goldens are unchanged. The part's image is fitted, contrast-stretched and Floyd–Steinberg
+    dithered to 1-bit (D3: still one bitmap for preview and print). Wide labels: a square beside the text;
+    labels with H ≥ 1.25 × W (e.g. 4 × 6): a band (≤ 2/5 of the text area) above the text. It can't share a side
+    with the QR code (`CONFIG_IMAGE_QR_SAME_SIDE`; the editor moves the QR across). The snapshot stores
+    `part.image_asset_id` (so `part_label_freshness` marks the label Out of date when the picture changes, no
+    schema change) and `generated.image_sha256` (the content-addressed file, for exact re-renders). A snapshot
+    whose picture file is missing renders with `LABEL_IMAGE_MISSING` and can't be printed. Parts without a
+    picture print text only, using the full width.
+90. **Configure and Settings restyle (owner's request).** Configure: numbered step cards with a one-line hint
+    each, a role legend (Main line / Second line / Detail), a live-preview card with a Ready/Needs-a-fix chip,
+    stronger selected state on segmented controls, fixed the collapsed Caption input. Settings: icon + hint per
+    section, a header per page and a live sidebar preview of the company name. Styling only.

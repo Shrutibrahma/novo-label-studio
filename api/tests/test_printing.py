@@ -325,3 +325,48 @@ def test_a9_unplug_usb_goes_offline() -> None:
 @pytest.mark.skip(reason="needs hardware")
 def test_a11_offset_shifts_test_label() -> None:
     """A11: +10 dot X offset visibly shifts the test label ~1.25 mm."""
+
+
+def picture_png(shade: int) -> bytes:
+    import io
+
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (240, 160), "white")
+    ImageDraw.Draw(img).ellipse([40, 20, 200, 140], fill=(shade, shade, shade))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+async def test_part_picture_on_the_label(admin: httpx.AsyncClient, ready: dict[str, Any]) -> None:
+    """The part's picture prints beside the text, is kept in the snapshot for exact reprints, and a new picture
+    makes the printed label Out of date."""
+    part = ready["plain"]
+    up = await admin.put(f"{V}/parts/{part['id']}/image", files={"file": ("p.png", picture_png(60), "image/png")})
+    assert up.status_code == 200, up.text
+    spec = {"fields": fields("part_name", "part_number"), "manual_fields": [],
+            "style": STYLE | {"image_position": "right"}}
+    base = {"scope": "part", "part_id": part["id"], "label_size_id": ready["sizes"]["Large"], "spec": spec,
+            "serial_mode": "none"}
+    r = await admin.post(f"{V}/configs", json=base | {"qr_mode": "part"})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "CONFIG_IMAGE_QR_SAME_SIDE"
+    spec["style"]["qr_position"] = "left"
+    r = await admin.post(f"{V}/configs", json=base | {"qr_mode": "part"})
+    assert r.status_code == 201, r.text
+
+    preview = await admin.post(f"{V}/render/preview", json={"part_id": part["id"]})
+    assert preview.status_code == 200 and preview.json()["fits"], preview.text
+    out = (await admin.post(f"{V}/print", json={"items": [{"part_id": part["id"], "copies": 1, "quantity": 1,
+                                                                     "manual_values": {}}]}, headers=key())).json()
+    async with sessionmaker()() as db:
+        pl = (await db.execute(select(PrintedLabel).where(PrintedLabel.part_id == uuid.UUID(part["id"])))).scalar_one()
+        assert pl.snapshot["part"]["image_asset_id"] and len(pl.snapshot["generated"]["image_sha256"]) == 64
+    assert out["jobs"]
+    states = {i["part_number"]: i["label_state"] for i in (await admin.get(f"{V}/parts")).json()["items"]}
+    assert states["NP-2"] == "current"
+    detail = (await admin.get(f"{V}/labels/{pl.id}")).json()
+    assert {"key": "image_asset_id", "label": "Picture", "value": "Printed"} in detail["fields"]
+
+    await admin.put(f"{V}/parts/{part['id']}/image", files={"file": ("q.png", picture_png(160), "image/png")})
+    states = {i["part_number"]: i["label_state"] for i in (await admin.get(f"{V}/parts")).json()["items"]}
+    assert states["NP-2"] == "out_of_date"

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, GripVertical, Plus, X } from "lucide-react";
+import { ChevronDown, GripVertical, Image as ImageIcon, Plus, X, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "../../components/Button";
 import { Input, SegmentedControl, Select, Switch } from "../../components/Form";
@@ -10,19 +10,58 @@ import { ManualFieldDialog } from "./ManualFieldDialog";
 import { RoleSelect } from "./RoleSelect";
 import { CORE_FIELD_LABELS, defaultRole, fieldName, GENERATED_KEYS, PART_FIELD_KEYS, ROLE_LIMIT, type Draft } from "./types";
 
-export function Section({ title, children, defaultOpen = true }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
+/** One step of the editor: a card with a numbered badge, an icon, the title and a one-line explanation. */
+export function Section({ title, children, defaultOpen = true, step, icon: Icon, hint }: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  step?: number;
+  icon?: LucideIcon;
+  hint?: string;
+}) {
   const [open, setOpen] = useState(defaultOpen);
-  const Icon = open ? ChevronDown : ChevronRight;
   return (
-    <section className="border-b border-border">
+    <section className="rounded-[12px] border border-border bg-surface shadow-card">
       <h3>
-        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 px-6 py-4 text-left t-h3 text-text hover:bg-row-hover">
-          <Icon size={16} strokeWidth={1.75} className="text-text-muted" aria-hidden />
-          {title}
+        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 rounded-[12px] px-5 py-4 text-left hover:bg-row-hover">
+          {step !== undefined && (
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary t-caption text-white" aria-hidden>
+              {step}
+            </span>
+          )}
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="inline-flex items-center gap-2 t-h3 text-text">
+              {Icon && <Icon size={16} strokeWidth={1.75} className="text-primary" aria-hidden />}
+              {title}
+            </span>
+            {hint && <span className="t-small text-text-muted">{hint}</span>}
+          </span>
+          <ChevronDown size={16} strokeWidth={1.75} className={`shrink-0 text-text-muted transition-transform duration-150 ${open ? "" : "-rotate-90"}`} aria-hidden />
         </button>
       </h3>
-      {open && <div className="flex flex-col gap-4 px-6 pb-6">{children}</div>}
+      {open && <div className="flex flex-col gap-4 border-t border-border px-5 pt-4 pb-5">{children}</div>}
     </section>
+  );
+}
+
+const ROLE_HINT: { role: SpecField["role"]; label: string; sample: string }[] = [
+  { role: "primary", label: "Main line", sample: "text-[15px] font-bold" },
+  { role: "secondary", label: "Second line", sample: "text-[13px] font-semibold" },
+  { role: "detail", label: "Detail", sample: "text-[11px]" },
+];
+
+/** What the three roles mean, shown above the field list. */
+function RoleLegend() {
+  return (
+    <div className="flex items-end gap-4 rounded-[8px] bg-surface-subtle px-3 py-2">
+      {ROLE_HINT.map((r) => (
+        <span key={r.role} className="flex flex-col">
+          <span className={`leading-tight text-text ${r.sample}`}>Aa</span>
+          <span className="whitespace-nowrap t-caption text-text-muted">{r.label}</span>
+        </span>
+      ))}
+      <span className="ml-auto text-right t-caption text-text-muted">Main line prints biggest.<br />Drag rows to reorder.</span>
+    </div>
   );
 }
 
@@ -93,6 +132,7 @@ export function FieldsSection({ draft, onFields, custom }: { draft: Draft; onFie
 
   return (
     <>
+      <RoleLegend />
       <ul className="flex flex-col gap-2" aria-label="Fields on the label">
         {fields.map((f, i) => {
           const name = fieldName(f.key, customLabels, draft.spec.manual_fields);
@@ -107,7 +147,7 @@ export function FieldsSection({ draft, onFields, custom }: { draft: Draft; onFie
                 setDragIndex(null);
               }}
               onDragEnd={() => setDragIndex(null)}
-              className={`flex flex-col gap-2 rounded-[8px] border bg-surface p-2 ${dragIndex === i ? "border-primary" : "border-border"}`}
+              className={`flex flex-col gap-2 rounded-[8px] border bg-surface p-2 transition-colors duration-150 hover:border-border-strong ${f.role === "primary" ? "border-l-4 border-l-primary" : ""} ${dragIndex === i ? "border-primary" : "border-border"}`}
             >
               <div className="flex items-center gap-2">
               <button
@@ -126,19 +166,21 @@ export function FieldsSection({ draft, onFields, custom }: { draft: Draft; onFie
                 <X size={16} strokeWidth={1.75} aria-hidden />
               </button>
               </div>
-              <div className="flex items-center gap-3 pl-8">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-8">
                 <RoleSelect label={`Role for ${name}`} value={f.role} disabledRoles={fullRoles} onChange={(role) => update(i, { role })} />
-                <label className="inline-flex items-center gap-2 t-small text-text-secondary">
+                <label className="inline-flex items-center gap-2 t-small text-text-secondary" title="Short text printed before the value, e.g. PN or REV">
                   Caption
-                  <Input
-                    aria-label={`Caption for ${name}`}
-                    placeholder="none"
-                    maxLength={8}
-                    heightClass="h-8"
-                    className="w-24 t-small"
-                    value={f.caption ?? ""}
-                    onChange={(e) => update(i, { caption: e.target.value || null })}
-                  />
+                  <span className="block w-20 shrink-0">
+                    <Input
+                      aria-label={`Caption for ${name}`}
+                      placeholder="none"
+                      maxLength={8}
+                      heightClass="h-8"
+                      className="t-small"
+                      value={f.caption ?? ""}
+                      onChange={(e) => update(i, { caption: e.target.value || null })}
+                    />
+                  </span>
                 </label>
                 <Switch label={<span className="t-caption text-text-secondary">UPPERCASE</span>} checked={f.uppercase} onChange={(v) => update(i, { uppercase: v })} />
               </div>
@@ -229,6 +271,39 @@ export function ManualSection({ draft, onChange }: { draft: Draft; onChange: (ma
   );
 }
 
+/** Section "Picture": the part's photo on the label, dithered for the thermal printer. */
+export function PictureSection({ draft, onChange }: { draft: Draft; onChange: (style: Partial<LabelStyle>) => void }) {
+  const style = draft.spec.style;
+  const value = style.image_position ?? "none";
+  const qrOn = draft.qr_mode !== "none";
+  return (
+    <>
+      <div className="flex items-start gap-3 rounded-[8px] bg-surface-subtle p-3">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-primary-subtle text-primary">
+          <ImageIcon size={18} strokeWidth={1.75} aria-hidden />
+        </span>
+        <p className="t-small text-text-secondary">
+          Prints the photo from the part, in black-and-white dots (the printer has no grey). Parts without a photo print text only. On tall labels the photo goes above the text.
+        </p>
+      </div>
+      <SegmentedControl
+        ariaLabel="Picture"
+        value={value}
+        onChange={(v) => {
+          // The picture and the QR code can't share a side: move the QR code across.
+          const flip = qrOn && v !== "none" && v === style.qr_position;
+          onChange(flip ? { image_position: v, qr_position: v === "left" ? "right" : "left" } : { image_position: v });
+        }}
+        options={[
+          { value: "none", label: "Off" },
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" },
+        ]}
+      />
+    </>
+  );
+}
+
 /** Section "QR code & serial". */
 export function QrSection({ draft, onChange }: { draft: Draft; onChange: (patch: Partial<Draft>, style?: Partial<LabelStyle>) => void }) {
   const serialOn = draft.serial_mode === "required";
@@ -259,7 +334,10 @@ export function QrSection({ draft, onChange }: { draft: Draft; onChange: (patch:
           <SegmentedControl
             ariaLabel="QR position"
             value={draft.spec.style.qr_position}
-            onChange={(v) => onChange({}, { qr_position: v })}
+            onChange={(v) => {
+              const img = draft.spec.style.image_position ?? "none";
+              onChange({}, img !== "none" && img === v ? { qr_position: v, image_position: v === "left" ? "right" : "left" } : { qr_position: v });
+            }}
             options={[
               { value: "left", label: "Left" },
               { value: "right", label: "Right" },

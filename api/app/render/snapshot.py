@@ -11,7 +11,8 @@ from app.render.fonts import renderer_version
 
 CORE_LABELS = {"part_number": "Part number", "part_name": "Part name", "description": "Description",
                "revision": "Revision", "label_name": "Label name", "serial": "Serial number",
-               "print_date": "Print date"}
+               "print_date": "Print date", "image_asset_id": "Picture"}
+IMAGE_KEY = "image_asset_id"
 
 
 def field_labels(spec: LabelSpec, custom_labels: dict[str, str]) -> dict[str, str]:
@@ -22,7 +23,9 @@ def field_labels(spec: LabelSpec, custom_labels: dict[str, str]) -> dict[str, st
 
 
 def part_field_values(part_number: str, part_name: str, description: str | None, revision: str | None,
-                      custom_data: dict[str, Any], label_name: str | None) -> dict[str, Any]:
+                      custom_data: dict[str, Any], label_name: str | None,
+                      image: tuple[str, str] | None = None) -> dict[str, Any]:
+    """`image` is (asset id, sha256 hex) of the part's picture, if it has one."""
     values: dict[str, Any] = dict(custom_data)
     values.update({"part_number": part_number, "part_name": part_name})
     if description is not None:
@@ -31,6 +34,8 @@ def part_field_values(part_number: str, part_name: str, description: str | None,
         values["revision"] = revision
     if label_name is not None:
         values["label_name"] = label_name
+    if image is not None:
+        values[IMAGE_KEY], values["_image_sha256"] = image
     return values
 
 
@@ -108,4 +113,9 @@ def build_snapshot(spec: LabelSpec, qr_mode: str, part_values: dict[str, Any], c
     payload = qr_payload(qr_mode, str(part_values["part_number"]), serial)
     if payload is not None:
         generated["qr_payload"] = payload
+    if spec.style.image_position != "none" and part_values.get(IMAGE_KEY):
+        # The asset id is compared with part.image_asset_id by part_label_freshness (a new picture makes the
+        # label out of date); the sha locates the content-addressed file for exact re-renders.
+        part[IMAGE_KEY] = part_values[IMAGE_KEY]
+        generated["image_sha256"] = part_values["_image_sha256"]
     return {"part": part, "manual": manual, "generated": generated}

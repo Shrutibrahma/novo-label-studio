@@ -1,7 +1,8 @@
 # Open questions
 
 Gaps or ambiguities found while building v1 from `SPEC.md` + `schema.sql`. For each: the question, what was
-chosen, and why. None of these change the database schema or a Decision-log item.
+chosen, and why. None of these change a Decision-log item. One changes the database schema, with your approval:
+#75 (migration 0002, faster `search_parts()`); `schema.sql` itself is unchanged.
 
 ## M1 — Foundation
 

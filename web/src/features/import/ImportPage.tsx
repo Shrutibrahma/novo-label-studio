@@ -93,7 +93,7 @@ export function ImportPage() {
     step = 1;
     const pct = b.progress_total ? Math.round((b.progress_done / b.progress_total) * 100) : 0;
     body = (
-      <div className="flex max-w-[560px] flex-col gap-3 rounded-[8px] border border-border bg-surface p-6" role="status">
+      <div className="flex max-w-[560px] flex-col gap-3 rounded-[8px] border border-border bg-surface shadow-card p-6" role="status">
         <p className="t-body text-text">
           Checking rows… {b.progress_done.toLocaleString("en-US")} of {b.progress_total.toLocaleString("en-US")}
         </p>

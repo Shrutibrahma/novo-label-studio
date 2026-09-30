@@ -30,7 +30,7 @@ export function Hero({ parsing, error, onUploaded }: { parsing: string | null; e
 
   const shownError = uploadError ?? error;
   return (
-    <div className="flex min-h-[calc(100vh-56px)] justify-center bg-gradient-to-b from-hero-bg-from to-hero-bg-to px-8 py-20">
+    <div className="flex min-h-[calc(100vh-56px)] justify-center bg-hero-bg-from bg-cover bg-center px-8 py-20" style={{ backgroundImage: "linear-gradient(rgba(23, 33, 15, 0.55), rgba(23, 33, 15, 0.55)), url(/art/backdrop.svg)" }}>
       <div className="flex w-[720px] flex-col items-center text-center">
         <h2 className="t-display text-hero-text">Give us your parts list</h2>
         <p className="mt-3 t-body text-hero-text-muted">Upload a CSV or Excel file. We'll match the columns and show you every change before anything is saved.</p>

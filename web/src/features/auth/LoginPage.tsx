@@ -4,7 +4,7 @@ import { Navigate, useLocation, useNavigate } from "react-router";
 import { Button } from "../../components/Button";
 import { Field, Input } from "../../components/Form";
 import { useDocumentTitle } from "../../app/page";
-import { BrandMark } from "../../app/Shell";
+import { AuthBackdrop, BrandLogo } from "../../app/Shell";
 import { api, ApiError } from "../../lib/api";
 import { qk, useMe, useSetupStatus } from "../../lib/queries";
 import type { User } from "../../lib/types";
@@ -42,10 +42,13 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-bg p-6">
-      <form onSubmit={submit} className="flex w-[400px] flex-col gap-5 rounded-[8px] border border-border bg-surface p-6" noValidate>
-        <BrandMark />
-        <h2 className="t-h2 text-text">Sign in</h2>
+    <AuthBackdrop>
+      <form onSubmit={submit} className="flex w-[400px] flex-col gap-5 rounded-[12px] border border-border bg-surface p-8 shadow-dialog" noValidate>
+        <BrandLogo className="h-14 self-center" />
+        <div className="flex flex-col gap-1 border-t border-border pt-5">
+          <h2 className="t-h2 text-text">Sign in</h2>
+          <p className="t-small text-text-muted">Novo Label Studio</p>
+        </div>
         <Field label="Username" htmlFor="username">
           <Input id="username" autoComplete="username" autoFocus value={username} onChange={(e) => setUsername(e.target.value)} />
         </Field>
@@ -61,6 +64,7 @@ export function LoginPage() {
           Sign in
         </Button>
       </form>
-    </div>
+      <p className="mt-6 t-caption text-hero-text-muted">Labels for every part, first time right.</p>
+    </AuthBackdrop>
   );
 }

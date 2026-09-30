@@ -112,7 +112,7 @@ export function PrintLabelsPage() {
         {errorMessage ? (
           <Banner tone="danger">{errorMessage}</Banner>
         ) : isEmptyCatalogue ? (
-          <div className="rounded-[8px] border border-border bg-surface">
+          <div className="rounded-[8px] border border-border bg-surface shadow-card">
             <EmptyState
               icon={Package}
               title="No parts yet"
@@ -121,7 +121,7 @@ export function PrintLabelsPage() {
             />
           </div>
         ) : !query.isPending && rows.length === 0 && debouncedQ ? (
-          <div className="rounded-[8px] border border-border bg-surface px-6 py-16 text-center t-body text-text-secondary">No parts match "{debouncedQ}"</div>
+          <div className="rounded-[8px] border border-border bg-surface shadow-card px-6 py-16 text-center t-body text-text-secondary">No parts match "{debouncedQ}"</div>
         ) : (
           <Table>
             <thead>

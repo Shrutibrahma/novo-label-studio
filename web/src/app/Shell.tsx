@@ -36,6 +36,20 @@ export function BrandMark() {
   );
 }
 
+/** The Novo Lean Solutions logo. It has white knock-outs, so it always sits on a white tile. */
+export function BrandLogo({ className = "h-12" }: { className?: string }) {
+  return <img src="/brand/novo-lean-solutions.svg" alt="Novo Lean Solutions" className={`block w-auto ${className}`} draggable={false} />;
+}
+
+/** Full-screen brand backdrop (engineering line art) behind the sign-in and setup cards. */
+export function AuthBackdrop({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative flex min-h-full items-center justify-center overflow-hidden bg-nav-bg bg-cover bg-center p-6" style={{ backgroundImage: "url(/art/backdrop.svg)" }}>
+      <div className="relative flex w-full flex-col items-center">{children}</div>
+    </div>
+  );
+}
+
 function PrinterStatusBlock() {
   const { printer } = useDefaultPrinter();
   const isAdmin = useIsAdmin();
@@ -76,21 +90,27 @@ function Sidebar() {
   const isAdmin = useIsAdmin();
   const settings = useSettings();
   return (
-    <aside className="fixed inset-y-0 left-0 flex w-60 flex-col bg-nav-bg">
-      <div className="flex h-14 items-center gap-3 px-4">
-        <BrandMark />
-        <div className="flex min-w-0 flex-col">
-          <span className="text-[15px] leading-5 font-semibold text-white">Novo Label Studio</span>
-          {settings.data?.company_name && <span className="truncate t-caption text-nav-text">{settings.data.company_name}</span>}
+    <aside className="fixed inset-y-0 left-0 flex w-60 flex-col bg-nav-bg bg-[length:280px_280px]" style={{ backgroundImage: "url(/art/pattern.svg)" }}>
+      <div className="flex flex-col gap-3 px-4 pt-4 pb-3">
+        <div className="rounded-[8px] bg-surface px-3 py-2 shadow-card">
+          <BrandLogo className="h-11" />
+        </div>
+        <div className="flex min-w-0 items-center gap-2 px-1">
+          <Tag size={16} strokeWidth={1.75} className="shrink-0 text-nav-text" aria-hidden />
+          <div className="flex min-w-0 flex-col">
+            <span className="text-[15px] leading-5 font-semibold text-white">Novo Label Studio</span>
+            {settings.data?.company_name && <span className="truncate t-caption text-nav-text">{settings.data.company_name}</span>}
+          </div>
         </div>
       </div>
-      <nav aria-label="Main" className="mt-2 flex flex-col gap-0.5 px-2">
+      <div className="mx-4 border-t border-nav-divider" />
+      <nav aria-label="Main" className="mt-3 flex flex-col gap-0.5 px-2">
         {NAV.filter((n) => !n.adminOnly || isAdmin).map((n) => (
           <NavLink
             key={n.to}
             to={n.to}
             className={({ isActive }) =>
-              `flex h-10 items-center gap-3 rounded-[6px] px-4 t-body-strong transition-colors duration-150 ease-out ${isActive ? "bg-nav-item-active text-nav-text-active" : "text-nav-text hover:bg-nav-item-hover"}`
+              `flex h-10 items-center gap-3 rounded-[6px] px-4 t-body-strong transition-colors duration-150 ease-out ${isActive ? "bg-nav-item-active text-nav-text-active shadow-card" : "text-nav-text hover:bg-nav-item-hover hover:text-nav-text-active"}`
             }
           >
             <n.icon size={20} strokeWidth={1.75} aria-hidden />
@@ -170,8 +190,11 @@ export function Shell({ children }: { children?: ReactNode }) {
     <div className="min-h-full">
       <Sidebar />
       <div className="ml-60 flex min-h-screen flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-surface px-8">
-          <h1 className="t-h1 text-text">{title}</h1>
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-surface/90 px-8 backdrop-blur">
+          <h1 className="flex items-center gap-3 t-h1 text-text">
+            <span className="h-6 w-1 rounded-full bg-primary" aria-hidden />
+            {title}
+          </h1>
           <UserMenu />
         </header>
         <ReachabilityBanner />

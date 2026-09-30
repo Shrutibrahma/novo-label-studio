@@ -6,7 +6,7 @@ import { Button } from "../../components/Button";
 import { Field, Input } from "../../components/Form";
 import { Spinner } from "../../components/Display";
 import { useDocumentTitle } from "../../app/page";
-import { BrandMark } from "../../app/Shell";
+import { AuthBackdrop, BrandLogo } from "../../app/Shell";
 import { api, ApiError } from "../../lib/api";
 import { qk, useSetupStatus } from "../../lib/queries";
 import { AGENT_STALE_MS, PRINTER_STATUS_WORD } from "../../lib/status";
@@ -92,10 +92,10 @@ export function SetupPage() {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-bg p-6">
-      <div className="flex w-[640px] flex-col rounded-[8px] border border-border bg-surface">
-        <div className="flex items-center gap-3 border-b border-border px-6 py-4">
-          <BrandMark />
+    <AuthBackdrop>
+      <div className="flex w-[640px] flex-col rounded-[12px] border border-border bg-surface shadow-dialog">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
+          <BrandLogo className="h-10" />
           <span className="t-h3 text-text">Novo Label Studio</span>
         </div>
         <ol className="flex gap-6 border-b border-border px-6 py-3" aria-label="Setup steps">
@@ -205,6 +205,6 @@ export function SetupPage() {
           )}
         </div>
       </div>
-    </div>
+    </AuthBackdrop>
   );
 }

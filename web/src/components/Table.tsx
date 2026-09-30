@@ -4,7 +4,7 @@ import { Skeleton } from "./Display";
 /** Table: header --surface-subtle with Caption uppercase muted; rows 52 (64 with images); hover/selected fills (11.4). */
 export function Table({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`overflow-hidden rounded-[8px] border border-border bg-surface ${className}`}>
+    <div className={`overflow-hidden rounded-[8px] border border-border bg-surface shadow-card ${className}`}>
       <table className="w-full border-collapse text-left">{children}</table>
     </div>
   );

@@ -38,7 +38,7 @@ export function StatusDot({ tone }: { tone: Tone }) {
 }
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-[8px] border border-border bg-surface p-6 ${className}`}>{children}</div>;
+  return <div className={`rounded-[8px] border border-border bg-surface shadow-card p-6 ${className}`}>{children}</div>;
 }
 
 /** Empty state: centred 40 px muted icon, H3 title, body text, one primary button (11.4). */

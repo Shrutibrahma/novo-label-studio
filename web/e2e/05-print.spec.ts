@@ -75,6 +75,8 @@ test("print, box set, batch and printer problems", async ({ page }) => {
   await search(page).fill("IM-006");
   const blocked = page.getByRole("row", { name: /IM-006/ }).getByRole("button", { name: "Print" });
   await expect(blocked).toBeDisabled();
+  // Wait for the search results to settle (IM-006 ranked first) so the row doesn't move out from under the mouse.
+  await expect(page.getByRole("row").nth(1)).toContainText("IM-006");
   await blocked.locator("..").hover();
   await expect(page.getByRole("tooltip")).toHaveText("The printer is out of labels.");
   await simStatus("ready");

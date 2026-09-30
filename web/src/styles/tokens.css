@@ -1,35 +1,36 @@
-/* Design tokens (spec section 11.1). Components reference these through Tailwind; never raw hex. */
+/* Design tokens (spec section 11.1, re-coloured to the Novo Lean Solutions brand: logo green #487037, warm grey
+   #847F72). Components reference these through Tailwind; never raw hex. */
 :root {
-  --nav-bg: #0B1F3A;
-  --nav-item-hover: #13294B;
-  --nav-item-active: #1C3A66;
-  --nav-text: #C9D4E5;
+  --nav-bg: #1B2517;
+  --nav-item-hover: #26331F;
+  --nav-item-active: #487037;
+  --nav-text: #C3CBBA;
   --nav-text-active: #FFFFFF;
-  --nav-divider: #1F3558;
+  --nav-divider: #2D3A26;
 
-  --hero-bg-from: #0A1B33;
-  --hero-bg-to: #10284A;
+  --hero-bg-from: #17210F;
+  --hero-bg-to: #2C4323;
   --hero-text: #FFFFFF;
-  --hero-text-muted: #9FB3CF;
-  --hero-drop-border: #3B5B8C;
-  --hero-drop-bg: #0F2544;
-  --hero-drop-bg-hover: #15305A;
+  --hero-text-muted: #B7C6AB;
+  --hero-drop-border: #5F8A4C;
+  --hero-drop-bg: #22321C;
+  --hero-drop-bg-hover: #2B3F24;
 
-  --bg: #F6F7F9;
+  --bg: #F3F2EE;
   --surface: #FFFFFF;
-  --surface-subtle: #F9FAFB;
-  --border: #E3E6EB;
-  --border-strong: #CBD2DC;
-  --text: #111827;
-  --text-secondary: #4B5563;
-  --text-muted: #6B7280;
+  --surface-subtle: #F8F7F4;
+  --border: #E3E0D9;
+  --border-strong: #CBC6BC;
+  --text: #1E1D1A;
+  --text-secondary: #545048;
+  --text-muted: #7A756B;
 
-  --primary: #2563EB;
-  --primary-hover: #1D4ED8;
-  --primary-pressed: #1E40AF;
-  --primary-subtle: #EFF6FF;
-  --primary-disabled: #BFDBFE;
-  --focus-ring: #93C5FD;
+  --primary: #487037;
+  --primary-hover: #3D5F2F;
+  --primary-pressed: #324E26;
+  --primary-subtle: #EEF4EA;
+  --primary-disabled: #BFD2B5;
+  --focus-ring: #A6C695;
 
   --success: #16A34A;
   --success-bg: #DCFCE7;
@@ -40,19 +41,23 @@
   --danger-hover: #B91C1C;
   --info: #0284C7;
   --info-bg: #E0F2FE;
-  --neutral-text: #4B5563;
-  --neutral-bg: #F3F4F6;
+  --neutral-text: #545048;
+  --neutral-bg: #EFEDE8;
 
   /* Hover fills from 11.4 (secondary/ghost buttons, table rows) and the skeleton block colour. */
-  --hover-fill: #F3F4F6;
-  --row-hover: #F9FAFB;
-  --skeleton: #EEF0F3;
+  --hover-fill: #F0EEE9;
+  --row-hover: #F8F7F4;
+  --skeleton: #ECEAE4;
 
-  --preview-surround: #E5E7EB;
-  --preview-edge: #9CA3AF;
+  --preview-surround: #E6E4DE;
+  --preview-edge: #A39E92;
   --label-paper: #FFFFFF;
   --label-ink: #000000;
 
-  --shadow-dropdown: 0 4px 12px rgba(17, 24, 39, 0.08);
-  --shadow-dialog: 0 20px 40px rgba(17, 24, 39, 0.18);
+  --brand-green: #487037;
+  --brand-grey: #847F72;
+
+  --shadow-card: 0 1px 2px rgba(30, 29, 26, 0.04), 0 2px 8px rgba(30, 29, 26, 0.04);
+  --shadow-dropdown: 0 4px 12px rgba(30, 29, 26, 0.10);
+  --shadow-dialog: 0 20px 40px rgba(30, 29, 26, 0.20);
 }

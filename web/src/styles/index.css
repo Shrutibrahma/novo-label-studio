@@ -97,7 +97,10 @@
   --color-label-paper: var(--label-paper);
   --color-label-ink: var(--label-ink);
   --color-white: var(--nav-text-active);
+  --color-brand-green: var(--brand-green);
+  --color-brand-grey: var(--brand-grey);
 
+  --shadow-card: var(--shadow-card);
   --shadow-dropdown: var(--shadow-dropdown);
   --shadow-dialog: var(--shadow-dialog);
 
@@ -117,7 +120,10 @@
   }
   body {
     margin: 0;
-    background: var(--bg);
+    /* Faint engineering dot grid behind the content. */
+    background-color: var(--bg);
+    background-image: radial-gradient(rgba(132, 127, 114, 0.14) 1px, transparent 1px);
+    background-size: 24px 24px;
     color: var(--text);
     font-family: var(--font-sans);
     font-size: 14px;

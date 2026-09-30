@@ -18,3 +18,4 @@ spike/m0/out/
 *.log
 .pytest-tmp/
 agent/.env
+web/tsconfig.tsbuildinfo

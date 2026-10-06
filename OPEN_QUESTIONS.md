@@ -267,3 +267,17 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     setup, tab titles, the printer test label, agent/service display names and the spooler job name, README and
     scripts. Internal identifiers (Compose project `labelstudio`, database, package names, repository name) are
     unchanged so existing data, volumes and the agent install keep working. Entries above keep the old name.
+92. **Bin label layout (owner's request, 2026-10-06), modelled on the Colt PFEP bin label workbook.** New
+    `style.layout`: `lines` (default, section 7.4) or `bin`, a fixed grid: title bar; main value + name with
+    headings on the left; two boxes beside them; below, the QR box, the photo box and two stacked boxes. Each box
+    is a heading + one field (`spec.bin`), filled from core, custom, generated or print-time fields. Values shrink
+    in 0.5 pt steps to fit (main and name may wrap to 2 lines); headings are white on a black strip. Not a
+    free-form designer: the grid is fixed. Empty boxes keep their heading so a set of bin cards looks uniform.
+    Style size/alignment/spacing don't apply to the grid and are hidden there. No schema change (spec is jsonb).
+93. **QR "All label data" (D13 extended, owner's request).** `style.qr_content`: `part_number` (default, D13
+    payload) or `label_data`: the D13 line first, then every value on the label as `HEADING: value` lines. The
+    payload limit rises to 300 characters; ECC stays M (7.6), so a long payload on a small QR box gives
+    `QR_TOO_SMALL`. With label data, scanners that type into Epicor will type all the lines; keep "Part number"
+    for scan-to-system use. The Excel sheet encoded the bare part number via api.qrserver.com; the app makes the
+    QR locally (offline) instead.
+

@@ -112,12 +112,34 @@ export interface LabelStyle {
   qr_position: "left" | "right";
   /** Older saved configs don't have it: treated as "none". */
   image_position?: "none" | "left" | "right";
+  /** "lines" (automatic, the default) or "bin" (the boxed bin-label grid). */
+  layout?: "lines" | "bin";
+  /** What the QR code holds: the part number (default) or every value on the label. */
+  qr_content?: "part_number" | "label_data";
+}
+
+export interface BinSlot {
+  key: string | null;
+  heading: string | null;
+}
+
+export interface BinLayout {
+  title: string;
+  main: BinSlot;
+  name: BinSlot;
+  info1: BinSlot;
+  info2: BinSlot;
+  info3: BinSlot;
+  info4: BinSlot;
+  qr_heading: string;
+  image_heading: string;
 }
 
 export interface LabelSpec {
   fields: SpecField[];
   manual_fields: ManualField[];
   style: LabelStyle;
+  bin?: BinLayout;
 }
 
 export function partImageUrl(p: { id: string; image_version: string | null }): string | null {

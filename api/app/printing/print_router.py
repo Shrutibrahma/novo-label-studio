@@ -193,7 +193,7 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
         if box is not None:
             manual[box.key] = {"index": p.indexes[0] or 1, "total": p.item.group.total if p.item.group else 1}
         serial = preview_serial(ctx.sequence) if p.config.serial_mode == "required" else None
-        snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date)
+        snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date, labels)
         result = await to_thread.run_sync(render_snapshot, snap, p.spec, p.config.qr_mode, p.size, printer, labels)
         if not result.fits:
             raise _first_warning(result)
@@ -233,7 +233,7 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
             manual = dict(p.manual)
             if box is not None:
                 manual[box.key] = {"index": index or 1, "total": p.item.group.total if p.item.group else 1}
-            snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date)
+            snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date, labels)
             result = await to_thread.run_sync(render_snapshot, snap, p.spec, p.config.qr_mode, p.size, printer, labels)
             if not result.fits:  # can't happen after the placeholder check; never print a label that doesn't fit
                 raise _first_warning(result)

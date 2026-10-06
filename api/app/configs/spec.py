@@ -68,12 +68,52 @@ class Style(_Strict):
     qr_position: Literal["left", "right"] = "right"
     # The part's picture (dithered to 1-bit): beside the text on wide labels, above it on tall ones.
     image_position: Literal["none", "left", "right"] = "none"
+    # "lines": automatic layout of spec.fields (section 7.4). "bin": the boxed bin-label grid (spec.bin).
+    layout: Literal["lines", "bin"] = "lines"
+    # What the QR code holds: the part number (D13: PN:…) or every value printed on the label, one per line.
+    qr_content: Literal["part_number", "label_data"] = "part_number"
+
+
+class BinSlot(_Strict):
+    key: str | None = Field(default=None, max_length=80)
+    heading: str | None = Field(default=None, max_length=24)
+
+
+def _slot(key: str | None, heading: str) -> BinSlot:
+    return BinSlot(key=key, heading=heading)
+
+
+class BinLayout(_Strict):
+    """The bin-label grid: a title bar; the main value and the name on the left with two boxes beside them;
+    below, the QR code, the picture and two more boxes. Each box shows its heading and one field."""
+
+    title: str = Field(default="BIN LABEL", max_length=40)
+    main: BinSlot = Field(default_factory=lambda: _slot("part_number", "PART #"))
+    name: BinSlot = Field(default_factory=lambda: _slot("part_name", "NAME"))
+    info1: BinSlot = Field(default_factory=lambda: _slot(None, "BIN QTY"))
+    info2: BinSlot = Field(default_factory=lambda: _slot(None, "BIN TYPE"))
+    info3: BinSlot = Field(default_factory=lambda: _slot(None, "STATION #"))
+    info4: BinSlot = Field(default_factory=lambda: _slot(None, "SUPERMARKET BIN"))
+    qr_heading: str = Field(default="SCAN", max_length=24)
+    image_heading: str = Field(default="IMAGE", max_length=24)
+
+    def slots(self) -> list[tuple[str, BinSlot]]:
+        return [("main", self.main), ("name", self.name), ("info1", self.info1), ("info2", self.info2),
+                ("info3", self.info3), ("info4", self.info4)]
 
 
 class LabelSpec(_Strict):
     fields: list[SpecField] = Field(default_factory=list, max_length=9)
     manual_fields: list[ManualField] = Field(default_factory=list, max_length=20)
     style: Style = Field(default_factory=Style)
+    bin: BinLayout = Field(default_factory=BinLayout)
+
+    def printed_keys(self) -> list[str]:
+        """Field keys shown on the label, in order: the fields (lines layout) or the filled boxes (bin)."""
+        if self.style.layout == "bin":
+            keys = [s.key for _, s in self.bin.slots() if s.key]
+            return list(dict.fromkeys(keys))
+        return [f.key for f in self.fields]
 
     def manual(self, key: str) -> ManualText | ManualNumber | ManualChoice | ManualBox | None:
         return next((m for m in self.manual_fields if m.key == key), None)
@@ -104,20 +144,25 @@ def validate_spec(spec: LabelSpec, custom_keys: set[str], qr_mode: str, serial_m
             raise ApiError("CONFIG_INVALID")
     if len(set(manual_keys)) != len(manual_keys) or sum(isinstance(m, ManualBox) for m in spec.manual_fields) > 1:
         raise ApiError("CONFIG_INVALID")
+    def known(key: str) -> bool:
+        return (key in CORE_KEYS or key == "label_name" or key in GENERATED_KEYS or key in custom_keys
+                or (key.startswith("manual.") and key[7:] in manual_keys))
+
     for f in spec.fields:
         counts[f.role] += 1
         if f.key in seen:
             raise ApiError("CONFIG_INVALID")
         seen.add(f.key)
-        known = (f.key in CORE_KEYS or f.key == "label_name" or f.key in GENERATED_KEYS or f.key in custom_keys
-                 or (f.key.startswith("manual.") and f.key[7:] in manual_keys))
-        if not known:
+        if not known(f.key):
             raise ApiError("CONFIG_FIELD_UNKNOWN")
+    if spec.style.layout == "bin" and any(s.key and not known(s.key) for _, s in spec.bin.slots()):
+        raise ApiError("CONFIG_FIELD_UNKNOWN")
     if any(counts[r] > limit for r, limit in ROLE_LIMITS.items()):
         raise ApiError("CONFIG_ROLE_LIMIT")
     if qr_mode == "serial" and serial_mode != "required":
         raise ApiError("CONFIG_QR_NEEDS_SERIAL")
     if spec.style.font not in allowed_fonts:
         raise ApiError("CONFIG_INVALID")
-    if qr_mode != "none" and spec.style.image_position == spec.style.qr_position:
+    if (qr_mode != "none" and spec.style.layout == "lines"
+            and spec.style.image_position == spec.style.qr_position):
         raise ApiError("CONFIG_IMAGE_QR_SAME_SIDE")

@@ -349,6 +349,193 @@ def _place_picture(img: Image.Image, picture: Image.Image, x: int, y: int, w: in
     img.paste(bits, (x + (w - bits.width) // 2, y + (h - bits.height) // 2))
 
 
+
+# ---------------------------------------------------------------- bin label grid
+MAX_QR_PAYLOAD_DATA = 300  # style.qr_content "label_data": several lines of values
+RULE = 2  # grid line width, dots
+PAD = 6  # inner padding of a box, dots
+HEADING_PT = 6.5
+BIN_PT = {  # (start, minimum) points per box kind
+    "title": (15.0, 8.0),
+    "main": (24.0, 10.0),
+    "name": (12.0, 7.0),
+    "info": (16.0, 7.0),
+}
+
+
+def value_for_key(key: str, spec: LabelSpec, snapshot: dict[str, Any]) -> str:
+    return field_value(SpecField(key=key, role="detail"), spec, snapshot)
+
+
+def _weights(style: Any) -> tuple[int, int]:
+    """(heading weight, value weight) for the chosen font."""
+    if style.font == "inter":
+        return 600, PRIMARY_WEIGHT[style.primary_weight] if style.primary_weight != "regular" else 600
+    return 400, 700
+
+
+def _fit_box(text: str, family: str, weight: int, start_pt: float, min_pt: float, w: int, h: int,
+             dpi: int, wrap: bool) -> tuple[float, list[str]] | None:
+    """Largest size (0.5 pt steps) at which `text` fits w × h on one line, or on two when `wrap`."""
+    pt = start_pt
+    while pt >= min_pt:
+        size = _dots(pt, dpi)
+        font = load_font(family, weight, size)
+        a, d = font.getmetrics()
+        if a + d <= h and _exact(family, weight, size, text) <= w:
+            return pt, [text]
+        if wrap and 2 * (a + d) <= h:
+            best: tuple[int, list[str]] | None = None
+            for first, second in _splits(text):
+                widest = max(_exact(family, weight, size, first), _exact(family, weight, size, second))
+                if widest <= w and (best is None or widest < best[0]):
+                    best = (widest, [first, second])
+            if best:
+                return pt, best[1]
+        pt -= STEP_PT
+    return None
+
+
+def _draw_lines(draw: ImageDraw.ImageDraw, parts: list[str], family: str, weight: int, pt: float, dpi: int,
+                x: int, y: int, w: int, h: int, align: str) -> None:
+    size = _dots(pt, dpi)
+    font = load_font(family, weight, size)
+    a, d = font.getmetrics()
+    total = (a + d) * len(parts)
+    ty = y + max(0, (h - total) // 2)
+    for part in parts:
+        width = _exact(family, weight, size, part)
+        tx = x if align == "left" else x + max(0, (w - width) // 2)
+        draw.text((tx, ty), part, font=font, fill=0, anchor="la")
+        ty += a + d
+
+
+def _rect(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int) -> None:
+    draw.rectangle([x, y, x + w - 1, y + h - 1], outline=0, width=RULE)
+
+
+def _heading(draw: ImageDraw.ImageDraw, text: str, family: str, weight: int, dpi: int, x: int, y: int, w: int
+             ) -> int:
+    """A small heading strip (white text on a black bar) at the top of a box; returns its height."""
+    if not text:
+        return 0
+    size = _dots(HEADING_PT, dpi)
+    font = load_font(family, weight, size)
+    a, d = font.getmetrics()
+    bar = a + d + 4
+    draw.rectangle([x, y, x + w - 1, y + bar - 1], fill=0)
+    label = text.upper()
+    width = _exact(family, weight, size, label)
+    while width > w - 2 * PAD and len(label) > 1:  # headings are short; clip rather than fail
+        label = label[:-1]
+        width = _exact(family, weight, size, label)
+    draw.text((x + (w - width) // 2, y + 2), label, font=font, fill=1, anchor="la")
+    return bar
+
+
+def render_bin(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str, Any], config: RenderConfig,
+               box: tuple[int, int, int, int], dpi: int, picture: Image.Image | None,
+               warn: Any) -> str | None:
+    """The bin-label grid inside `box` (x, y, w, h). Returns the QR payload drawn, if any.
+
+    ┌───────────────── title ─────────────────┐
+    │ main (big)               │ info1 │ info2 │
+    │ name                     │       │       │
+    ├── QR ───────┬── picture ──┬── info3 ─────┤
+    │             │             ├── info4 ─────┤
+    └─────────────┴─────────────┴──────────────┘
+    Boxes without a field keep their heading, so every label of a set looks the same."""
+    spec, style, layout = config.spec, config.spec.style, config.spec.bin
+    family = style.font
+    head_w, value_w = _weights(style)
+    x0, y0, w, h = box
+    _rect(draw, x0, y0, w, h)
+
+    def value(slot: Any) -> str:
+        return value_for_key(slot.key, spec, snapshot) if slot.key else ""
+
+    def text_box(slot: Any, kind: str, x: int, y: int, bw: int, bh: int, heading: bool, align: str) -> None:
+        _rect(draw, x, y, bw, bh)
+        top = _heading(draw, slot.heading or "", family, head_w, dpi, x, y, bw) if heading else 0
+        text = value(slot)
+        if not text:
+            return
+        start, minimum = BIN_PT[kind]
+        fit = _fit_box(text, family, value_w if kind != "name" else value_w, start, minimum,
+                       bw - 2 * PAD, bh - top - 2 * PAD, dpi, wrap=kind in ("name", "main"))
+        if fit is None:
+            warn("TEXT_TOO_LONG", slot.key)
+            fit = (minimum, [text])
+        _draw_lines(draw, fit[1], family, value_w, fit[0], dpi, x + PAD, y + top + PAD, bw - 2 * PAD,
+                    bh - top - 2 * PAD, align)
+
+    # Title bar.
+    y = y0
+    if layout.title.strip():
+        th = h * 14 // 100
+        _rect(draw, x0, y, w, th)
+        fit = _fit_box(layout.title.strip(), family, value_w, *BIN_PT["title"], w - 2 * PAD, th - 2 * PAD, dpi,
+                       wrap=False)
+        if fit:
+            _draw_lines(draw, fit[1], family, value_w, fit[0], dpi, x0 + PAD, y + PAD, w - 2 * PAD, th - 2 * PAD,
+                        "center")
+        y += th
+
+    # Upper block: main value and name on the left (heading in a narrow column), info1/info2 on the right.
+    upper = (y0 + h - y) * 42 // 100
+    left_w = w * 60 // 100
+    side_w = (w - left_w) // 2
+    main_h = upper * 52 // 100
+    for slot, kind, yy, hh in ((layout.main, "main", y, main_h), (layout.name, "name", y + main_h, upper - main_h)):
+        cap_w = left_w * 18 // 100
+        _rect(draw, x0, yy, cap_w, hh)
+        cap = (slot.heading or "").upper()
+        if cap:
+            size = _dots(HEADING_PT, dpi)
+            font = load_font(family, head_w, size)
+            draw.text((x0 + PAD, yy + PAD), cap, font=font, fill=0, anchor="la")
+        text_box(slot, kind, x0 + cap_w, yy, left_w - cap_w, hh, heading=False, align="left")
+    text_box(layout.info1, "info", x0 + left_w, y, side_w, upper, heading=True, align="center")
+    text_box(layout.info2, "info", x0 + left_w + side_w, y, w - left_w - side_w, upper, heading=True,
+             align="center")
+    y += upper
+
+    # Lower block: QR, picture, and info3/info4 stacked on the right.
+    lower = y0 + h - y
+    has_qr = config.qr_mode != "none"
+    wants_picture = bool(snapshot.get("generated", {}).get("image_sha256")) and style.image_position != "none"
+    info_w = w * 34 // 100
+    media = [m for m, on in (("qr", has_qr), ("picture", wants_picture)) if on]
+    if not media:
+        info_w = w
+    media_w = (w - info_w) // len(media) if media else 0
+    payload: str | None = None
+    x = x0
+    for m in media:
+        bw = media_w if m != media[-1] else w - info_w - (x - x0)
+        _rect(draw, x, y, bw, lower)
+        top = _heading(draw, layout.qr_heading if m == "qr" else layout.image_heading, family, head_w, dpi, x, y, bw)
+        ix, iy, iw, ih = x + PAD, y + top + PAD, bw - 2 * PAD, lower - top - 2 * PAD
+        if m == "qr":
+            payload = str(snapshot.get("generated", {}).get("qr_payload") or "")
+            limit = MAX_QR_PAYLOAD_DATA if style.qr_content == "label_data" else MAX_QR_PAYLOAD
+            if not payload or len(payload) > limit:
+                warn("QR_PAYLOAD_TOO_LONG")
+            else:
+                side = min(iw, ih)
+                code = _draw_qr(draw, payload, ix + (iw - side) // 2, iy + (ih - side) // 2, side)
+                if code:
+                    warn(code)
+        elif picture is None:
+            warn("LABEL_IMAGE_MISSING")
+        else:
+            _place_picture(img, picture, ix, iy, iw, ih)
+        x += bw
+    half = lower // 2
+    text_box(layout.info3, "info", x, y, x0 + w - x, half, heading=True, align="center")
+    text_box(layout.info4, "info", x, y + half, x0 + w - x, lower - half, heading=True, align="center")
+    return payload
+
 # ---------------------------------------------------------------- render
 def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, printer: RenderPrinter,
            picture: Image.Image | None = None) -> RenderResult:
@@ -372,6 +559,14 @@ def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, pri
         label = label or key or ""
         warnings.append(Warning(code, key, message_for(code, Field=label)))
 
+    if style.layout == "bin":
+        payload = render_bin(img, draw, snapshot, config, (cx, cy, cw, ch), dpi, picture, warn)
+        for key in required_missing(spec, snapshot):
+            warn("REQUIRED_VALUE_MISSING", f"manual.{key}")
+        png = png_bytes(img)
+        return RenderResult(png=png, sha256=sha256(png), fits=not warnings, warnings=warnings, width_dots=W,
+                            height_dots=H, qr_payload=payload, family="bin")
+
     # 7.4 layout family.
     tx, ty, tw, th = cx, cy, cw, ch
     payload: str | None = None
@@ -390,7 +585,8 @@ def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, pri
             side = min(cw * 3 // 5, ch * 9 // 20)
             qx, qy = cx + (cw - side) // 2, cy
             ty, th = cy + side + QR_GAP, ch - side - QR_GAP
-        if len(payload) > MAX_QR_PAYLOAD or not payload:
+        limit = MAX_QR_PAYLOAD_DATA if style.qr_content == "label_data" else MAX_QR_PAYLOAD
+        if len(payload) > limit or not payload:
             warn("QR_PAYLOAD_TOO_LONG")
         else:
             code = _draw_qr(draw, payload, qx, qy, side)

@@ -39,13 +39,43 @@ def part_field_values(part_number: str, part_name: str, description: str | None,
     return values
 
 
-def qr_payload(qr_mode: str, part_number: str, serial: str | None) -> str | None:
-    """9.4: plain text; always the part number, never the label name."""
-    if qr_mode == "part":
-        return f"PN:{part_number}"
-    if qr_mode == "serial":
-        return f"SN:{serial or ''}|PN:{part_number}"
-    return None
+def qr_payload(qr_mode: str, part_number: str, serial: str | None,
+               label_data: list[tuple[str, str]] | None = None) -> str | None:
+    """9.4: plain text; always the part number, never the label name. With label data (style.qr_content
+    "label_data"), every value printed on the label follows, one "HEADING: value" per line."""
+    if qr_mode == "none":
+        return None
+    head = f"PN:{part_number}" if qr_mode == "part" else f"SN:{serial or ''}|PN:{part_number}"
+    if not label_data:
+        return head
+    lines = [head] + [f"{k}: {v}" for k, v in label_data if v]
+    return "\n".join(lines)
+
+
+def label_data(spec: LabelSpec, part_values: dict[str, Any], manual: dict[str, Any], serial: str | None,
+               print_date: str, labels: dict[str, str]) -> list[tuple[str, str]]:
+    """(heading, value) for every value printed on the label, in label order, for the QR code."""
+    out: list[tuple[str, str]] = []
+    if spec.style.layout == "bin":
+        items = [(s.key, (s.heading or "").strip()) for _, s in spec.bin.slots() if s.key]
+    else:
+        items = [(f.key, "") for f in spec.fields]
+    for key, heading in items:
+        if key == "part_number":
+            continue  # already the first line
+        if key == "serial":
+            value = serial or ""
+        elif key == "print_date":
+            value = print_date
+        elif key.startswith("manual."):
+            mdef = spec.manual(key[7:])
+            raw = manual.get(key[7:])
+            value = (f"{mdef.noun} {raw.get('index', 1)}/{raw.get('total', 1)}"
+                     if isinstance(mdef, ManualBox) and isinstance(raw, dict) else display_value(raw))
+        else:
+            value = display_value(part_values.get(key))
+        out.append(((heading or labels.get(key, key)).upper(), value))
+    return out
 
 
 def clean_manual(spec: LabelSpec, values: dict[str, Any] | None, labels: dict[str, str]) -> dict[str, Any]:
@@ -102,15 +132,18 @@ def clean_manual(spec: LabelSpec, values: dict[str, Any] | None, labels: dict[st
 
 
 def build_snapshot(spec: LabelSpec, qr_mode: str, part_values: dict[str, Any], custom_keys: set[str],
-                   manual: dict[str, Any], serial: str | None, print_date: str) -> dict[str, Any]:
+                   manual: dict[str, Any], serial: str | None, print_date: str,
+                   labels: dict[str, str] | None = None) -> dict[str, Any]:
     """snapshot.part keys are exactly the part fields printed on the label (core, custom, label_name) with the
     source JSON types; empty fields aren't printed, so they aren't in the snapshot."""
-    printed = [f.key for f in spec.fields if f.key in CORE_KEYS or f.key == "label_name" or f.key in custom_keys]
+    printed = [k for k in spec.printed_keys() if k in CORE_KEYS or k == "label_name" or k in custom_keys]
     part = {k: part_values[k] for k in printed if k in part_values and display_value(part_values[k]) != ""}
     generated: dict[str, Any] = {"print_date": print_date, "renderer_version": renderer_version()}
     if serial is not None:
         generated["serial"] = serial
-    payload = qr_payload(qr_mode, str(part_values["part_number"]), serial)
+    data = label_data(spec, part_values, manual, serial, print_date, labels or {}) \
+        if spec.style.qr_content == "label_data" else None
+    payload = qr_payload(qr_mode, str(part_values["part_number"]), serial, data)
     if payload is not None:
         generated["qr_payload"] = payload
     if spec.style.image_position != "none" and part_values.get(IMAGE_KEY):

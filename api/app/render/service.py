@@ -106,5 +106,6 @@ async def render_part(db: AsyncSession, ctx: RenderContext, part: Part, cfg: Con
     manual = clean_manual(spec, manual_values, labels)
     snapshot = build_snapshot(spec, cfg.qr_mode, part_values(part, await label_name_of(db, part.id),
                                                              await image_of(db, part)),
-                              ctx.custom_keys, manual, serial if cfg.serial_mode == "required" else None, print_date)
+                              ctx.custom_keys, manual, serial if cfg.serial_mode == "required" else None, print_date,
+                              labels)
     return render_snapshot(snapshot, spec, cfg.qr_mode, size, ctx.printer, labels), snapshot, spec, size

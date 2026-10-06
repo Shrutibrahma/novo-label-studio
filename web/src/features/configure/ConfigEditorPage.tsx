@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleCheck, Eye, Image as ImageIcon, LayoutList, Palette, QrCode, Ruler, TextCursorInput, TriangleAlert } from "lucide-react";
+import { CircleCheck, Eye, Grid2x2, Image as ImageIcon, LayoutList, Palette, QrCode, Ruler, TextCursorInput, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useNavigate, useParams } from "react-router";
 import { usePage } from "../../app/page";
@@ -10,7 +10,7 @@ import { ConfirmDialog } from "../../components/Overlay";
 import { api, ApiError } from "../../lib/api";
 import { qk, useSettings, useSizes } from "../../lib/queries";
 import { useCustomFields, usePart, type LabelStyle } from "../../lib/parts";
-import { FieldsSection, ManualSection, PictureSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
+import { BinSection, defaultBin, FieldsSection, LayoutSection, ManualSection, PictureSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
 import { PartPicker, type PickedPart } from "./PartPicker";
 import { useFirstActivePart } from "./ConfigureListPage";
 import { toDraft, type ConfigOut, type Draft } from "./types";
@@ -77,6 +77,9 @@ export function ConfigEditorPage() {
   if (!draft || !base.data) return <div className="p-8">{base.error && <Banner tone="danger">{base.error.message}</Banner>}</div>;
 
   const setStyle = (s: Partial<LabelStyle>) => setDraft({ ...draft, spec: { ...draft.spec, style: { ...draft.spec.style, ...s } } });
+  const isBin = draft.spec.style.layout === "bin";
+  const setLayout = (layout: "lines" | "bin") =>
+    setDraft({ ...draft, spec: { ...draft.spec, bin: draft.spec.bin ?? defaultBin(custom.data ?? []), style: { ...draft.spec.style, layout } } });
   const nextVersion = base.data.next_version;
 
   const publish = async () => {
@@ -125,22 +128,31 @@ export function ConfigEditorPage() {
           <Section title="Size" step={1} icon={Ruler} hint="The label roll loaded in the printer">
             <SizeSection sizes={(sizes.data ?? []).filter((s) => s.active)} value={draft.label_size_id} onChange={(id) => setDraft({ ...draft, label_size_id: id })} />
           </Section>
-          <Section title="What's on the label" step={2} icon={LayoutList} hint="Pick the part details to print, biggest first">
-            <FieldsSection draft={draft} custom={custom.data ?? []} onFields={(fields) => setDraft({ ...draft, spec: { ...draft.spec, fields } })} />
+          <Section title="Layout" step={2} icon={Grid2x2} hint="Text lines, or a boxed bin-label grid">
+            <LayoutSection value={isBin ? "bin" : "lines"} onChange={setLayout} />
           </Section>
-          <Section title="Picture" step={3} icon={ImageIcon} hint="Put the part's photo on the label">
+          {isBin ? (
+            <Section title="Boxes" step={3} icon={LayoutList} hint="A heading and a field for each box">
+              <BinSection draft={draft} custom={custom.data ?? []} onChange={(bin) => setDraft({ ...draft, spec: { ...draft.spec, bin } })} />
+            </Section>
+          ) : (
+            <Section title="What's on the label" step={3} icon={LayoutList} hint="Pick the part details to print, biggest first">
+              <FieldsSection draft={draft} custom={custom.data ?? []} onFields={(fields) => setDraft({ ...draft, spec: { ...draft.spec, fields } })} />
+            </Section>
+          )}
+          <Section title="Picture" step={4} icon={ImageIcon} hint="Put the part's photo on the label">
             <PictureSection draft={draft} onChange={setStyle} />
           </Section>
-          <Section title="QR code & serial" step={4} icon={QrCode} hint="Scannable code and a unique number per label">
+          <Section title="QR code & serial" step={5} icon={QrCode} hint="Scannable code and a unique number per label">
             <QrSection
               draft={draft}
               onChange={(patch, style) => setDraft({ ...draft, ...patch, spec: style ? { ...draft.spec, style: { ...draft.spec.style, ...style } } : draft.spec })}
             />
           </Section>
-          <Section title="Style" step={5} icon={Palette} hint="Font, weight, size and spacing">
+          <Section title="Style" step={6} icon={Palette} hint={isBin ? "Font and weight" : "Font, weight, size and spacing"}>
             <StyleSection style={draft.spec.style} fonts={settings.data?.fonts_allowed ?? ["inter", "roboto_condensed", "atkinson"]} onChange={setStyle} />
           </Section>
-          <Section title="Print-time fields" step={6} icon={TextCursorInput} hint="Typed in when printing, e.g. lot number or BOX 1/3">
+          <Section title="Print-time fields" step={7} icon={TextCursorInput} hint="Typed in when printing, e.g. lot number or BOX 1/3">
             <ManualSection draft={draft} onChange={(manual_fields, fields) => setDraft({ ...draft, spec: { ...draft.spec, manual_fields, fields } })} />
           </Section>
         </div>

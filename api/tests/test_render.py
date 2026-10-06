@@ -316,3 +316,79 @@ def test_picture_off_or_missing() -> None:
     # The snapshot names a picture but its file is gone: a warning, so the label can't be printed.
     missing = run(spec(image_position="left"), size, snapshot=with_picture(SNAPSHOT))
     assert not missing.fits and [w.code for w in missing.warnings] == ["LABEL_IMAGE_MISSING"]
+
+
+# ---------------------------------------------------------------- bin label grid
+BIN_CUSTOM = {"bin_qty": 300, "bin_type": "S", "station": "P2", "supermarket_bin": "SD-1-A"}
+
+
+def bin_spec(**style: Any) -> LabelSpec:
+    return LabelSpec.model_validate({
+        "fields": [],
+        "style": {"layout": "bin", "qr_content": "label_data"} | style,
+        "bin": {"title": "COLT BIN ID",
+                "info1": {"key": "bin_qty", "heading": "BIN QTY"}, "info2": {"key": "bin_type", "heading": "BIN TYPE"},
+                "info3": {"key": "station", "heading": "STATION #"},
+                "info4": {"key": "supermarket_bin", "heading": "SUPERMARKET BIN"}},
+    })
+
+
+def bin_snapshot(s: LabelSpec, qr: str = "part", picture: bool = False) -> dict[str, Any]:
+    from app.render.snapshot import build_snapshot, part_field_values
+    image = ("00000000-0000-0000-0000-000000000001", "ab" * 32) if picture else None
+    values = part_field_values("400278", "Bolt Catch Cross Pin", None, None, BIN_CUSTOM, None, image)
+    return build_snapshot(s, qr, values, set(BIN_CUSTOM), {}, None, "2026-10-06", LABELS)
+
+
+def test_bin_label_grid_fits_large_with_qr_and_picture() -> None:
+    s = bin_spec(image_position="left")
+    snap = bin_snapshot(s, picture=True)
+    assert snap["generated"]["qr_payload"] == ("PN:400278\nPART NAME: Bolt Catch Cross Pin\nBIN QTY: 300\n"
+                                               "BIN TYPE: S\nSTATION #: P2\nSUPERMARKET BIN: SD-1-A").replace(
+        "PART NAME", "NAME")
+    assert set(snap["part"]) == {"part_number", "part_name", *BIN_CUSTOM, "image_asset_id"}
+    size = SIZES["large"]
+    args = (snap, RenderConfig(spec=s, qr_mode="part", field_labels=LABELS),
+            RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER, photo())
+    r = render(*args)
+    assert r.fits, r.warnings
+    assert r.family == "bin" and r.qr_payload == snap["generated"]["qr_payload"]
+    assert render(*args).png == r.png  # deterministic
+    img = Image.open(io.BytesIO(r.png))
+    m = SAFE_MARGIN_DOTS
+    grey = img.convert("L")
+    assert img.mode == "1" and all(grey.getpixel((x, y)) == 255 for x in range(img.width) for y in range(m // 2))
+
+
+def test_bin_label_without_qr_or_picture_and_part_number_only_qr() -> None:
+    s = bin_spec(qr_content="part_number")
+    snap = bin_snapshot(s, qr="none")
+    size = SIZES["medium"]
+    r = render(snap, RenderConfig(spec=s, qr_mode="none", field_labels=LABELS),
+               RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER)
+    assert r.fits and r.qr_payload is None
+    assert bin_snapshot(s)["generated"]["qr_payload"] == "PN:400278"  # D13 format unless label data is chosen
+
+
+def test_bin_label_long_name_wraps_then_warns() -> None:
+    s = bin_spec()
+    snap = bin_snapshot(s)
+    snap["part"]["part_name"] = "Bolt Catch Cross Pin Retaining Spring Assembly Left Hand"
+    size = SIZES["large"]
+    r = render(snap, RenderConfig(spec=s, qr_mode="none", field_labels=LABELS),
+               RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER)
+    assert r.fits  # wraps onto two lines
+    snap["part"]["part_name"] = "X" * 120
+    r = render(snap, RenderConfig(spec=s, qr_mode="none", field_labels=LABELS),
+               RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER)
+    assert [w.code for w in r.warnings] == ["TEXT_TOO_LONG"]
+
+
+def test_bin_spec_rejects_unknown_box_field() -> None:
+    from app.configs.spec import validate_spec
+    from app.errors import ApiError
+    s = bin_spec()
+    validate_spec(s, set(BIN_CUSTOM), "part", "none", ["inter"])
+    with pytest.raises(ApiError) as err:
+        validate_spec(s, {"bin_qty"}, "part", "none", ["inter"])
+    assert err.value.code == "CONFIG_FIELD_UNKNOWN"

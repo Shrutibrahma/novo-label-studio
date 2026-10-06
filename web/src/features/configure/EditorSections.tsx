@@ -4,7 +4,7 @@ import { Button } from "../../components/Button";
 import { Input, SegmentedControl, Select, Switch } from "../../components/Form";
 import { Tooltip } from "../../components/Tooltip";
 import { inches } from "../../lib/format";
-import type { CustomField, LabelStyle, ManualField, SpecField } from "../../lib/parts";
+import type { BinLayout, BinSlot, CustomField, LabelStyle, ManualField, SpecField } from "../../lib/parts";
 import type { LabelSize } from "../../lib/types";
 import { ManualFieldDialog } from "./ManualFieldDialog";
 import { RoleSelect } from "./RoleSelect";
@@ -225,6 +225,144 @@ export function FieldsSection({ draft, onFields, custom }: { draft: Draft; onFie
   );
 }
 
+/** A bin layout to start from: the Excel bin-label boxes, filled with custom fields whose names match. */
+export function defaultBin(custom: CustomField[]): BinLayout {
+  const find = (...words: string[]) =>
+    custom.find((f) => words.every((w) => f.label.toLowerCase().includes(w) || f.key.includes(w)))?.key ?? null;
+  return {
+    title: "BIN LABEL",
+    main: { key: "part_number", heading: "PART #" },
+    name: { key: "part_name", heading: "NAME" },
+    info1: { key: find("qty") ?? find("quantity"), heading: "BIN QTY" },
+    info2: { key: find("bin", "type") ?? find("type"), heading: "BIN TYPE" },
+    info3: { key: find("station"), heading: "STATION #" },
+    info4: { key: find("supermarket") ?? find("location"), heading: "SUPERMARKET BIN" },
+    qr_heading: "SCAN",
+    image_heading: "IMAGE",
+  };
+}
+
+const BIN_SLOTS: { slot: "main" | "name" | "info1" | "info2" | "info3" | "info4"; where: string }[] = [
+  { slot: "main", where: "Top left, biggest" },
+  { slot: "name", where: "Under the main value" },
+  { slot: "info1", where: "Top right, first box" },
+  { slot: "info2", where: "Top right, second box" },
+  { slot: "info3", where: "Bottom right, upper box" },
+  { slot: "info4", where: "Bottom right, lower box" },
+];
+
+/** A small drawing of the grid with the chosen slot highlighted. */
+function SlotMap({ active }: { active: string }) {
+  const cell = (name: string, cls: string) => (
+    <span className={`rounded-[2px] border ${active === name ? "border-primary bg-primary" : "border-border-strong bg-surface"} ${cls}`} />
+  );
+  return (
+    <span className="grid h-9 w-14 shrink-0 grid-cols-[3fr_1fr_1fr] grid-rows-[1fr_1fr_1fr] gap-[2px]" aria-hidden>
+      {cell("main", "col-start-1 row-start-1")}
+      {cell("info1", "col-start-2 row-span-2 row-start-1")}
+      {cell("info2", "col-start-3 row-span-2 row-start-1")}
+      {cell("name", "col-start-1 row-start-2")}
+      <span className="col-span-2 col-start-1 row-start-3 grid grid-cols-2 gap-[2px]">
+        <span className="rounded-[2px] border border-border-strong bg-surface-subtle" />
+        <span className="rounded-[2px] border border-border-strong bg-surface-subtle" />
+      </span>
+      <span className="col-start-3 row-start-3 grid grid-rows-2 gap-[1px]">
+        {cell("info3", "")}
+        {cell("info4", "")}
+      </span>
+    </span>
+  );
+}
+
+/** Section "Boxes" (bin layout): the title, then a heading and a field for each box of the grid. */
+export function BinSection({ draft, custom, onChange }: { draft: Draft; custom: CustomField[]; onChange: (bin: BinLayout) => void }) {
+  const bin = draft.spec.bin ?? defaultBin(custom);
+  const options = [
+    { value: "", label: "— Empty —" },
+    ...PART_FIELD_KEYS.map((k) => ({ value: k, label: CORE_FIELD_LABELS[k]! })),
+    ...custom.filter((f) => f.printable).map((f) => ({ value: f.key, label: f.label })),
+    ...GENERATED_KEYS.map((k) => ({ value: k, label: CORE_FIELD_LABELS[k]! })),
+    ...draft.spec.manual_fields.map((m) => ({ value: `manual.${m.key}`, label: `${m.label} (print-time)` })),
+  ];
+  const setSlot = (slot: (typeof BIN_SLOTS)[number]["slot"], patch: Partial<BinSlot>) => onChange({ ...bin, [slot]: { ...bin[slot], ...patch } });
+  return (
+    <>
+      <label className="flex flex-col gap-1.5">
+        <span className="t-body-strong text-text">Title bar</span>
+        <Input aria-label="Title bar" maxLength={40} value={bin.title} placeholder="Leave empty for no title" onChange={(e) => onChange({ ...bin, title: e.target.value })} />
+      </label>
+      <ul className="flex flex-col gap-2" aria-label="Boxes on the label">
+        {BIN_SLOTS.map(({ slot, where }) => (
+          <li key={slot} className="flex items-center gap-3 rounded-[8px] border border-border p-2">
+            <SlotMap active={slot} />
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span className="t-caption text-text-muted">{where}</span>
+              <div className="flex gap-2">
+                <span className="block w-[160px] shrink-0">
+                  <Input aria-label={`Heading for ${where}`} heightClass="h-8" className="t-small uppercase" maxLength={24} placeholder="Heading" value={bin[slot].heading ?? ""} onChange={(e) => setSlot(slot, { heading: e.target.value || null })} />
+                </span>
+                <span className="block min-w-0 flex-1">
+                  <Select aria-label={`Field for ${where}`} className="h-8 t-small" value={bin[slot].key ?? ""} options={options} onChange={(e) => setSlot(slot, { key: e.target.value || null })} />
+                </span>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1.5">
+          <span className="t-small text-text-secondary">QR box heading</span>
+          <Input aria-label="QR box heading" heightClass="h-8" className="t-small uppercase" maxLength={24} value={bin.qr_heading} onChange={(e) => onChange({ ...bin, qr_heading: e.target.value })} />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="t-small text-text-secondary">Picture box heading</span>
+          <Input aria-label="Picture box heading" heightClass="h-8" className="t-small uppercase" maxLength={24} value={bin.image_heading} onChange={(e) => onChange({ ...bin, image_heading: e.target.value })} />
+        </label>
+      </div>
+      <p className="t-caption text-text-muted">Bin quantity, bin type, station and location come from custom fields. Add them in Settings → Custom fields and fill them by importing your parts list.</p>
+    </>
+  );
+}
+
+/** Section "Layout": automatic lines or the bin-label grid. */
+export function LayoutSection({ value, onChange }: { value: "lines" | "bin"; onChange: (v: "lines" | "bin") => void }) {
+  const card = (v: "lines" | "bin", title: string, body: string, art: ReactNode) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={value === v}
+      onClick={() => onChange(v)}
+      className={`flex flex-col gap-2 rounded-[8px] border p-3 text-left transition-colors duration-150 ${value === v ? "border-primary bg-primary-subtle" : "border-border bg-surface hover:bg-row-hover"}`}
+    >
+      {art}
+      <span className="t-body-strong text-text">{title}</span>
+      <span className="t-caption text-text-secondary">{body}</span>
+    </button>
+  );
+  return (
+    <div role="radiogroup" aria-label="Layout" className="grid grid-cols-2 gap-2">
+      {card("lines", "Lines", "Fields stacked as text lines, sized automatically", (
+        <span className="flex h-12 flex-col justify-center gap-1 rounded-[4px] border border-border-strong bg-surface px-2" aria-hidden>
+          <span className="h-2 w-3/4 rounded-full bg-text" />
+          <span className="h-1.5 w-1/2 rounded-full bg-text-muted" />
+          <span className="h-1 w-2/3 rounded-full bg-text-muted" />
+        </span>
+      ))}
+      {card("bin", "Bin label", "Boxed grid with headings, QR and photo, like a TPS bin card", (
+        <span className="grid h-12 grid-cols-[2fr_1fr_1fr] grid-rows-[1fr_2fr_2fr] gap-[2px] rounded-[4px] border border-border-strong bg-surface p-[2px]" aria-hidden>
+          <span className="col-span-3 rounded-[1px] bg-text" />
+          <span className="rounded-[1px] border border-text-muted" />
+          <span className="row-span-1 rounded-[1px] border border-text-muted" />
+          <span className="rounded-[1px] border border-text-muted" />
+          <span className="rounded-[1px] border border-text-muted" />
+          <span className="rounded-[1px] border border-text-muted" />
+          <span className="rounded-[1px] border border-text-muted" />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** Section "Print-time fields": list + "Add print-time field". */
 export function ManualSection({ draft, onChange }: { draft: Draft; onChange: (manual: ManualField[], fields: SpecField[]) => void }) {
   const [editing, setEditing] = useState<ManualField | "new" | null>(null);
@@ -276,6 +414,19 @@ export function PictureSection({ draft, onChange }: { draft: Draft; onChange: (s
   const style = draft.spec.style;
   const value = style.image_position ?? "none";
   const qrOn = draft.qr_mode !== "none";
+  if (style.layout === "bin") {
+    return (
+      <SegmentedControl
+        ariaLabel="Picture"
+        value={value === "none" ? "none" : "left"}
+        onChange={(v) => onChange({ image_position: v })}
+        options={[
+          { value: "none", label: "Off" },
+          { value: "left", label: "Show photo box" },
+        ]}
+      />
+    );
+  }
   return (
     <>
       <div className="flex items-start gap-3 rounded-[8px] bg-surface-subtle p-3">
@@ -330,6 +481,25 @@ export function QrSection({ draft, onChange }: { draft: Draft; onChange: (patch:
       </div>
       {draft.qr_mode !== "none" && (
         <div className="flex flex-col gap-1.5">
+          <span className="t-body-strong text-text">QR contains</span>
+          <SegmentedControl
+            ariaLabel="QR contains"
+            value={draft.spec.style.qr_content ?? "part_number"}
+            onChange={(v) => onChange({}, { qr_content: v })}
+            options={[
+              { value: "part_number", label: "Part number" },
+              { value: "label_data", label: "All label data" },
+            ]}
+          />
+          <span className="t-caption text-text-muted">
+            {(draft.spec.style.qr_content ?? "part_number") === "label_data"
+              ? "Scanning shows every value on the label, one per line. Too much text makes the QR too small to print."
+              : "Scanning gives PN: and the part number."}
+          </span>
+        </div>
+      )}
+      {draft.qr_mode !== "none" && draft.spec.style.layout !== "bin" && (
+        <div className="flex flex-col gap-1.5">
           <span className="t-body-strong text-text">QR position</span>
           <SegmentedControl
             ariaLabel="QR position"
@@ -357,6 +527,7 @@ const FONT_FAMILY: Record<LabelStyle["font"], string> = {
 
 /** Section "Style". */
 export function StyleSection({ style, fonts, onChange }: { style: LabelStyle; fonts: string[]; onChange: (s: Partial<LabelStyle>) => void }) {
+  const bin = style.layout === "bin";
   const Row = ({ label, children }: { label: string; children: ReactNode }) => (
     <div className="flex flex-col gap-1.5">
       <span className="t-body-strong text-text">{label}</span>
@@ -378,6 +549,7 @@ export function StyleSection({ style, fonts, onChange }: { style: LabelStyle; fo
         <SegmentedControl ariaLabel="Main line weight" value={style.primary_weight} onChange={(v) => onChange({ primary_weight: v })}
           options={[{ value: "regular", label: "Regular" }, { value: "bold", label: "Bold" }, { value: "extra_bold", label: "Extra bold" }]} />
       </Row>
+      {!bin && (<>
       <Row label="Text size">
         <SegmentedControl ariaLabel="Text size" value={style.emphasis} onChange={(v) => onChange({ emphasis: v })}
           options={[{ value: "small", label: "Small" }, { value: "medium", label: "Medium" }, { value: "large", label: "Large" }]} />
@@ -390,6 +562,7 @@ export function StyleSection({ style, fonts, onChange }: { style: LabelStyle; fo
         <SegmentedControl ariaLabel="Spacing" value={style.spacing} onChange={(v) => onChange({ spacing: v })}
           options={[{ value: "compact", label: "Compact" }, { value: "standard", label: "Standard" }, { value: "spacious", label: "Spacious" }]} />
       </Row>
+      </>)}
     </>
   );
 }

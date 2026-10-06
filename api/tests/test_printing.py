@@ -370,3 +370,47 @@ async def test_part_picture_on_the_label(admin: httpx.AsyncClient, ready: dict[s
     await admin.put(f"{V}/parts/{part['id']}/image", files={"file": ("q.png", picture_png(160), "image/png")})
     states = {i["part_number"]: i["label_state"] for i in (await admin.get(f"{V}/parts")).json()["items"]}
     assert states["NP-2"] == "out_of_date"
+
+
+async def test_bin_label_layout_prints_with_label_data_qr(admin: httpx.AsyncClient, ready: dict[str, Any]) -> None:
+    """The bin-label grid: boxes filled from custom fields, the QR holds every value on the label, and the
+    snapshot keeps the boxed fields for exact reprints and freshness."""
+    for label in ("Bin qty", "Station"):
+        assert (await admin.post(f"{V}/custom-fields", json={"label": label, "data_type": "text"})).status_code == 201
+    part = ready["plain"]
+    r = await admin.patch(f"{V}/parts/{part['id']}", json={"custom_data": {"bin_qty": "300", "station": "P2"}})
+    assert r.status_code == 200, r.text
+    spec = {"fields": [], "manual_fields": [],
+            "style": STYLE | {"layout": "bin", "qr_content": "label_data"},
+            "bin": {"title": "COLT BIN ID", "info1": {"key": "bin_qty", "heading": "BIN QTY"},
+                    "info3": {"key": "station", "heading": "STATION #"}}}
+    base = {"scope": "part", "part_id": part["id"], "label_size_id": ready["sizes"]["Large"], "spec": spec,
+            "qr_mode": "part", "serial_mode": "none"}
+    bad = json_copy(base)
+    bad["spec"]["bin"]["info2"] = {"key": "nope", "heading": "X"}
+    r = await admin.post(f"{V}/configs", json=bad)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "CONFIG_FIELD_UNKNOWN"
+    r = await admin.post(f"{V}/configs", json=base)
+    assert r.status_code == 201, r.text
+    assert r.json()["spec"]["bin"]["info1"] == {"key": "bin_qty", "heading": "BIN QTY"}
+
+    preview = await admin.post(f"{V}/render/preview", json={"part_id": part["id"]})
+    assert preview.status_code == 200 and preview.json()["fits"] and preview.json()["family"] == "bin", preview.text
+    r = await admin.post(f"{V}/print", json={"items": [{"part_id": part["id"], "copies": 2, "quantity": 1,
+                                                        "manual_values": {}}]}, headers=key())
+    assert r.status_code == 200, r.text
+    async with sessionmaker()() as db:
+        pl = (await db.execute(select(PrintedLabel).where(PrintedLabel.part_id == uuid.UUID(part["id"])))).scalar_one()
+        assert pl.snapshot["part"] == {"part_number": "NP-2", "part_name": "Plain washer", "bin_qty": "300",
+                                       "station": "P2"}
+        assert pl.qr_payload == "PN:NP-2\nNAME: Plain washer\nBIN QTY: 300\nSTATION #: P2"
+    states = {i["part_number"]: i["label_state"] for i in (await admin.get(f"{V}/parts")).json()["items"]}
+    assert states["NP-2"] == "current"
+    await admin.patch(f"{V}/parts/{part['id']}", json={"custom_data": {"bin_qty": "250", "station": "P2"}})
+    states = {i["part_number"]: i["label_state"] for i in (await admin.get(f"{V}/parts")).json()["items"]}
+    assert states["NP-2"] == "out_of_date"  # a boxed field changed
+
+
+def json_copy(value: Any) -> Any:
+    import json
+    return json.loads(json.dumps(value))

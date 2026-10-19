@@ -414,3 +414,30 @@ async def test_bin_label_layout_prints_with_label_data_qr(admin: httpx.AsyncClie
 def json_copy(value: Any) -> Any:
     import json
     return json.loads(json.dumps(value))
+
+
+async def test_grid_layout_publishes_previews_and_prints(admin: httpx.AsyncClient, ready: dict[str, Any]) -> None:
+    assert (await admin.post(f"{V}/custom-fields", json={"label": "Bin qty", "data_type": "text"})).status_code == 201
+    part = ready["plain"]
+    await admin.patch(f"{V}/parts/{part['id']}", json={"custom_data": {"bin_qty": "300"}})
+    grid = {"rows": [
+        {"height": 1, "cells": [{"kind": "text", "text": "BIN CARD"}]},
+        {"height": 2, "cells": [{"kind": "field", "key": "part_number", "heading": "PART #", "width": 3},
+                                {"kind": "field", "key": "bin_qty", "heading": "QTY", "width": 1}]},
+        {"height": 3, "cells": [{"kind": "qr", "heading": "SCAN"}, {"kind": "field", "key": "part_name"}]}]}
+    base = {"scope": "part", "part_id": part["id"], "label_size_id": ready["sizes"]["Large"], "serial_mode": "none",
+            "spec": {"fields": [], "manual_fields": [], "style": STYLE | {"layout": "grid"}, "grid": grid}}
+    r = await admin.post(f"{V}/configs", json=base | {"qr_mode": "none"})
+    assert r.status_code == 422 and r.json()["error"]["message"] == \
+        "Turn on the QR code (QR code & serial) to use a QR box."
+    r = await admin.post(f"{V}/configs", json=base | {"qr_mode": "part"})
+    assert r.status_code == 201, r.text
+    preview = (await admin.post(f"{V}/render/preview", json={"part_id": part["id"]})).json()
+    assert preview["fits"] and preview["family"] == "grid", preview
+    r = await admin.post(f"{V}/print", json={"items": [{"part_id": part["id"], "copies": 1, "quantity": 1,
+                                                        "manual_values": {}}]}, headers=key())
+    assert r.status_code == 200, r.text
+    async with sessionmaker()() as db:
+        pl = (await db.execute(select(PrintedLabel).where(PrintedLabel.part_id == uuid.UUID(part["id"])))).scalar_one()
+        assert pl.snapshot["part"] == {"part_number": "NP-2", "bin_qty": "300", "part_name": "Plain washer"}
+        assert pl.qr_payload == "PN:NP-2"

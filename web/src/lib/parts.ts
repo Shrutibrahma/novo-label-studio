@@ -112,8 +112,9 @@ export interface LabelStyle {
   qr_position: "left" | "right";
   /** Older saved configs don't have it: treated as "none". */
   image_position?: "none" | "left" | "right";
-  /** "lines" (automatic, the default) or "bin" (the boxed bin-label grid). */
-  layout?: "lines" | "bin";
+  /** "lines" (automatic, the default), "grid" (rows & boxes built in the editor), or "bin" (the earlier fixed
+   * bin grid; opened in the builder as a grid). */
+  layout?: "lines" | "bin" | "grid";
   /** What the QR code holds: the part number (default) or every value on the label. */
   qr_content?: "part_number" | "label_data";
 }
@@ -135,11 +136,34 @@ export interface BinLayout {
   image_heading: string;
 }
 
+export interface GridCell {
+  kind: "field" | "text" | "qr" | "image" | "blank";
+  key: string | null;
+  text: string | null;
+  heading: string | null;
+  /** Share of the row, relative to the other boxes. */
+  width: number;
+  size: "auto" | "small" | "medium" | "large" | "xl";
+  align: "left" | "center";
+  bold: boolean;
+}
+
+export interface GridRow {
+  /** Share of the label height, relative to the other rows. */
+  height: number;
+  cells: GridCell[];
+}
+
+export interface GridLayout {
+  rows: GridRow[];
+}
+
 export interface LabelSpec {
   fields: SpecField[];
   manual_fields: ManualField[];
   style: LabelStyle;
   bin?: BinLayout;
+  grid?: GridLayout;
 }
 
 export function partImageUrl(p: { id: string; image_version: string | null }): string | null {

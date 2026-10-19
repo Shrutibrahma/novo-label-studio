@@ -392,3 +392,103 @@ def test_bin_spec_rejects_unknown_box_field() -> None:
     with pytest.raises(ApiError) as err:
         validate_spec(s, {"bin_qty"}, "part", "none", ["inter"])
     assert err.value.code == "CONFIG_FIELD_UNKNOWN"
+
+
+def test_bin_boxes_without_a_field_are_not_drawn() -> None:
+    """A box with no field leaves no trace (its heading isn't drawn), and the other boxes take its space."""
+    def render_with(heading: str, info3_key: str | None) -> Any:
+        s = LabelSpec.model_validate({"fields": [], "style": {"layout": "bin"},
+                                      "bin": {"info1": {"key": "bin_qty", "heading": "BIN QTY"},
+                                              "info2": {"key": None, "heading": heading},
+                                              "info3": {"key": info3_key, "heading": "STATION #"},
+                                              "info4": {"key": None, "heading": heading}}})
+        snap = bin_snapshot(s, qr="none")
+        size = SIZES["medium"]
+        return render(snap, RenderConfig(spec=s, qr_mode="none", field_labels=LABELS),
+                      RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER)
+
+    a, b = render_with("ANYTHING", None), render_with("SOMETHING ELSE", None)
+    assert a.fits and a.png == b.png  # headings of unset boxes don't matter: they aren't drawn
+    assert render_with("ANYTHING", "station").png != a.png  # setting a field brings the box back
+
+
+# ---------------------------------------------------------------- user-built grid (rows & boxes)
+def grid_spec(rows: list[dict[str, Any]], **style: Any) -> LabelSpec:
+    return LabelSpec.model_validate({"fields": [], "style": {"layout": "grid"} | style, "grid": {"rows": rows}})
+
+
+def cell(key: str | None = None, heading: str | None = None, width: int = 1, **kw: Any) -> dict[str, Any]:
+    return {"kind": "field", "key": key, "heading": heading, "width": width} | kw
+
+
+BIN_CARD = [
+    {"height": 2, "cells": [{"kind": "text", "text": "COLT BIN ID", "size": "large"}]},
+    {"height": 4, "cells": [cell("part_number", "PART #", 3, align="left"), cell("bin_qty", "BIN QTY"),
+                            cell("bin_type", "BIN TYPE")]},
+    {"height": 2, "cells": [cell("part_name", "NAME", size="medium", align="left")]},
+    {"height": 6, "cells": [{"kind": "qr", "heading": "SCAN", "width": 3}, {"kind": "image", "heading": "IMAGE", "width": 3},
+                            cell("station", "STATION #", 2), cell("supermarket_bin", "SUPERMARKET", 2)]},
+]
+
+
+def test_grid_bin_card_fits_and_is_deterministic() -> None:
+    s = grid_spec(BIN_CARD)
+    snap = bin_snapshot(s, picture=True)
+    assert snap["generated"]["qr_payload"] == "PN:400278" and "image_asset_id" in snap["part"]
+    assert set(snap["part"]) == {"part_number", "part_name", *BIN_CUSTOM, "image_asset_id"}
+    size = SIZES["large"]
+    args = (snap, RenderConfig(spec=s, qr_mode="part", field_labels=LABELS),
+            RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER, photo())
+    r = render(*args)
+    assert r.fits, r.warnings
+    assert r.family == "grid" and r.qr_payload == "PN:400278" and render(*args).png == r.png
+
+
+def test_grid_widths_and_heights_are_relative() -> None:
+    a = grid_spec([{"height": 1, "cells": [cell("part_number", width=1), cell("part_name", width=1)]}])
+    b = grid_spec([{"height": 7, "cells": [cell("part_number", width=50), cell("part_name", width=50)]}])
+    size = SIZES["medium"]
+    ra, rb = (render(bin_snapshot(x, qr="none"), RenderConfig(spec=x, qr_mode="none", field_labels=LABELS),
+                     RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER) for x in (a, b))
+    assert ra.png == rb.png
+
+
+def test_grid_text_box_empty_value_and_too_long() -> None:
+    s = grid_spec([{"cells": [{"kind": "text", "text": "HELLO"}, cell("description", "DESC")]}])
+    snap = bin_snapshot(s, qr="none")
+    size = SIZES["small"]
+    r = render(snap, RenderConfig(spec=s, qr_mode="none", field_labels=LABELS),
+               RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER)
+    assert r.fits  # an empty value keeps its (set-up) box, blank
+    tiny = grid_spec([{"cells": [cell("part_name", width=1), cell("part_number", width=30)]}])
+    snap = bin_snapshot(tiny, qr="none")
+    snap["part"]["part_name"] = "Bolt Catch Cross Pin Retaining Spring Assembly"
+    r = render(snap, RenderConfig(spec=tiny, qr_mode="none", field_labels=LABELS),
+               RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER)
+    assert [w.code for w in r.warnings] == ["TEXT_TOO_LONG"]
+
+
+def test_grid_validation() -> None:
+    from app.configs.spec import validate_spec
+    from app.errors import ApiError
+    keys = set(BIN_CUSTOM)
+    validate_spec(grid_spec(BIN_CARD), keys, "part", "none", ["inter"])
+    for spec_, qr, code in [(grid_spec([]), "none", "CONFIG_GRID_EMPTY"),
+                            (grid_spec(BIN_CARD), "none", "CONFIG_QR_BOX_NEEDS_QR"),
+                            (grid_spec([{"cells": [cell("nope")]}]), "none", "CONFIG_FIELD_UNKNOWN")]:
+        with pytest.raises(ApiError) as err:
+            validate_spec(spec_, keys, qr, "none", ["inter"])
+        assert err.value.code == code
+    with pytest.raises(Exception):
+        grid_spec([{"cells": [cell("part_number")] * 7}])  # at most 6 boxes in a row
+
+
+def test_grid_write_in_box_draws_only_its_outline_and_heading() -> None:
+    def with_box(kind: str) -> Any:
+        s = grid_spec([{"cells": [cell("part_number", width=3), {"kind": kind, "heading": "DUE DATE", "width": 1}]}])
+        size = SIZES["large"]
+        return render(bin_snapshot(s, qr="none"), RenderConfig(spec=s, qr_mode="none", field_labels=LABELS),
+                      RenderSize(Decimal(size[0]), Decimal(size[1])), PRINTER)
+
+    blank, image_without_photo = with_box("blank"), with_box("image")
+    assert blank.fits and blank.png == image_without_photo.png  # both: outline + heading, empty inside

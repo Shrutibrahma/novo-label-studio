@@ -37,7 +37,7 @@ It is parts-master-first: every label comes from a part record. Nobody draws a l
 - Custom part fields
 - Part images (manual upload, or pictures placed in cells of an XLSX import)
 - Label configuration: global default + optional per-part override, versioned
-- Automatic layout; limited styling (font, weight, size emphasis, alignment, spacing); a fixed bin-label grid layout (title, boxed fields with headings, QR, photo)
+- Automatic layout; limited styling (font, weight, size emphasis, alignment, spacing); a rows & boxes label builder (templates: kanban card, bin card, simple, blank; boxes show a field, fixed text, QR, photo or a write-in space)
 - Print-time manual fields: text, number, choice, box sequence (BOX 1/3)
 - Automatic serial numbers (NOVO-00000001), atomic, never reused
 - QR codes (per-part or per-label)
@@ -50,7 +50,7 @@ It is parts-master-first: every label comes from a part record. Nobody draws a l
 
 **Non-goals (do not build)**
 
-PDF import · rack/location management · inventory counts · MES/ERP/WMS integration · touchscreen kiosk mode · mobile app · barcode-scanner workflows beyond typing into the search box · RFID · approval workflows · free-form drag-and-drop label designer · analytics dashboards · AI features · multi-language UI · dark mode (except the fixed dark sidebar and import hero) · printers other than ZPL.
+PDF import · rack/location management · inventory counts · MES/ERP/WMS integration · touchscreen kiosk mode · mobile app · barcode-scanner workflows beyond typing into the search box · RFID · approval workflows · free-form drag-and-drop label designer (a structured rows & boxes builder was added at the owner's request, 2026-10-19) · analytics dashboards · AI features · multi-language UI · dark mode (except the fixed dark sidebar and import hero) · printers other than ZPL.
 
 ## 2. Decision log
 

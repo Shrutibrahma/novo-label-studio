@@ -45,6 +45,8 @@ ERRORS: dict[str, tuple[int, str]] = {
     "QR_TOO_SMALL": (422, "The QR code would be too small to scan. Choose a larger size or move fields."),
     "LABEL_IMAGE_MISSING": (422, "This part's picture can't be found. Upload it again on the part."),
     "CONFIG_IMAGE_QR_SAME_SIDE": (422, "The picture and the QR code can't be on the same side."),
+    "CONFIG_GRID_EMPTY": (422, "Add at least one box to the label."),
+    "CONFIG_QR_BOX_NEEDS_QR": (422, "Turn on the QR code (QR code & serial) to use a QR box."),
     "QR_PAYLOAD_TOO_LONG": (422, "This part number is too long for the QR code."),
     "REQUIRED_VALUE_MISSING": (422, "Enter {Field} to print."),
     "PRINTER_OFFLINE": (409, "The printer is offline. Check the USB cable and that the printer is on."),

@@ -1,4 +1,5 @@
 import type { LabelSpec, ManualField, SizeBrief, SpecField } from "../../lib/parts";
+import { binToGrid } from "./GridBuilder";
 
 export interface ConfigOut {
   id: string;
@@ -65,5 +66,11 @@ export function defaultRole(fields: SpecField[]): SpecField["role"] | null {
 }
 
 export function toDraft(c: ConfigOut): Draft {
-  return { label_size_id: c.size.id, spec: structuredClone(c.spec), qr_mode: c.qr_mode, serial_mode: c.serial_mode };
+  const spec = structuredClone(c.spec);
+  // The earlier fixed bin grid opens in the rows & boxes builder (publishing saves it as a grid).
+  if (spec.style.layout === "bin" && spec.bin) {
+    spec.grid = binToGrid(spec.bin, (spec.style.image_position ?? "none") !== "none", c.qr_mode !== "none");
+    spec.style = { ...spec.style, layout: "grid" };
+  }
+  return { label_size_id: c.size.id, spec, qr_mode: c.qr_mode, serial_mode: c.serial_mode };
 }

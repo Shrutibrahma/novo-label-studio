@@ -376,23 +376,34 @@ def _weights(style: Any) -> tuple[int, int]:
 
 def _fit_box(text: str, family: str, weight: int, start_pt: float, min_pt: float, w: int, h: int,
              dpi: int, wrap: bool) -> tuple[float, list[str]] | None:
-    """Largest size (0.5 pt steps) at which `text` fits w × h on one line, or on two when `wrap`."""
-    pt = start_pt
-    while pt >= min_pt:
+    """Largest size (0.5 pt steps) at which `text` fits w × h on one line; only if no size fits on one line,
+    the largest at which it fits on two (when `wrap`)."""
+    def sizes() -> list[float]:
+        out, pt = [], start_pt
+        while pt >= min_pt:
+            out.append(pt)
+            pt -= STEP_PT
+        return out
+
+    for pt in sizes():
         size = _dots(pt, dpi)
-        font = load_font(family, weight, size)
-        a, d = font.getmetrics()
+        a, d = load_font(family, weight, size).getmetrics()
         if a + d <= h and _exact(family, weight, size, text) <= w:
             return pt, [text]
-        if wrap and 2 * (a + d) <= h:
-            best: tuple[int, list[str]] | None = None
-            for first, second in _splits(text):
-                widest = max(_exact(family, weight, size, first), _exact(family, weight, size, second))
-                if widest <= w and (best is None or widest < best[0]):
-                    best = (widest, [first, second])
-            if best:
-                return pt, best[1]
-        pt -= STEP_PT
+    if not wrap:
+        return None
+    for pt in sizes():
+        size = _dots(pt, dpi)
+        a, d = load_font(family, weight, size).getmetrics()
+        if 2 * (a + d) > h:
+            continue
+        best: tuple[int, list[str]] | None = None
+        for first, second in _splits(text):
+            widest = max(_exact(family, weight, size, first), _exact(family, weight, size, second))
+            if widest <= w and (best is None or widest < best[0]):
+                best = (widest, [first, second])
+        if best:
+            return pt, best[1]
     return None
 
 
@@ -462,7 +473,7 @@ def render_bin(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str, 
             return
         start, minimum = BIN_PT[kind]
         fit = _fit_box(text, family, value_w if kind != "name" else value_w, start, minimum,
-                       bw - 2 * PAD, bh - top - 2 * PAD, dpi, wrap=kind in ("name", "main"))
+                       bw - 2 * PAD, bh - top - 2 * PAD, dpi, wrap=kind == "name")
         if fit is None:
             warn("TEXT_TOO_LONG", slot.key)
             fit = (minimum, [text])
@@ -481,35 +492,47 @@ def render_bin(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str, 
                         "center")
         y += th
 
+    # Only boxes that have a field are drawn; the others give their space to their neighbours.
+    has_qr = config.qr_mode != "none"
+    wants_picture = bool(snapshot.get("generated", {}).get("image_sha256")) and style.image_position != "none"
+    left = [(s, k) for s, k in ((layout.main, "main"), (layout.name, "name")) if s.key]
+    right = [s for s in (layout.info1, layout.info2) if s.key]
+    media = [m for m, on in (("qr", has_qr), ("picture", wants_picture)) if on]
+    stack = [s for s in (layout.info3, layout.info4) if s.key]
+    has_upper, has_lower = bool(left or right), bool(media or stack)
+    rest = y0 + h - y
+    upper = rest if not has_lower else 0 if not has_upper else rest * 42 // 100
+
     # Upper block: main value and name on the left (heading in a narrow column), info1/info2 on the right.
-    upper = (y0 + h - y) * 42 // 100
-    left_w = w * 60 // 100
-    side_w = (w - left_w) // 2
-    main_h = upper * 52 // 100
-    for slot, kind, yy, hh in ((layout.main, "main", y, main_h), (layout.name, "name", y + main_h, upper - main_h)):
-        cap_w = left_w * 18 // 100
-        _rect(draw, x0, yy, cap_w, hh)
-        cap = (slot.heading or "").upper()
-        if cap:
-            size = _dots(HEADING_PT, dpi)
-            font = load_font(family, head_w, size)
-            draw.text((x0 + PAD, yy + PAD), cap, font=font, fill=0, anchor="la")
-        text_box(slot, kind, x0 + cap_w, yy, left_w - cap_w, hh, heading=False, align="left")
-    text_box(layout.info1, "info", x0 + left_w, y, side_w, upper, heading=True, align="center")
-    text_box(layout.info2, "info", x0 + left_w + side_w, y, w - left_w - side_w, upper, heading=True,
-             align="center")
-    y += upper
+    if has_upper:
+        left_w = 0 if not left else w if not right else w * 60 // 100
+        yy = y
+        for i, (slot, kind) in enumerate(left):
+            hh = upper if len(left) == 1 else (upper * 52 // 100 if i == 0 else upper - upper * 52 // 100)
+            cap = (slot.heading or "").upper()
+            cap_w = max(left_w * 14 // 100, max(_exact(family, head_w, _dots(HEADING_PT, dpi), (sl.heading or "").upper())
+                                               for sl, _ in left) + 2 * PAD) if cap or any(sl.heading for sl, _ in left) else 0
+            if cap_w:
+                _rect(draw, x0, yy, cap_w, hh)
+            if cap:
+                font = load_font(family, head_w, _dots(HEADING_PT, dpi))
+                draw.text((x0 + PAD, yy + PAD), cap, font=font, fill=0, anchor="la")
+            text_box(slot, kind, x0 + cap_w, yy, left_w - cap_w, hh, heading=False, align="left")
+            yy += hh
+        xx = x0 + left_w
+        for i, slot in enumerate(right):
+            bw = (w - left_w) // len(right) if i < len(right) - 1 else x0 + w - xx
+            text_box(slot, "info", xx, y, bw, upper, heading=True, align="center")
+            xx += bw
+        y += upper
 
     # Lower block: QR, picture, and info3/info4 stacked on the right.
     lower = y0 + h - y
-    has_qr = config.qr_mode != "none"
-    wants_picture = bool(snapshot.get("generated", {}).get("image_sha256")) and style.image_position != "none"
-    info_w = w * 34 // 100
-    media = [m for m, on in (("qr", has_qr), ("picture", wants_picture)) if on]
-    if not media:
-        info_w = w
-    media_w = (w - info_w) // len(media) if media else 0
     payload: str | None = None
+    if not has_lower:
+        return payload
+    info_w = 0 if not stack else w if not media else w * 34 // 100
+    media_w = (w - info_w) // len(media) if media else 0
     x = x0
     for m in media:
         bw = media_w if m != media[-1] else w - info_w - (x - x0)
@@ -531,10 +554,97 @@ def render_bin(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str, 
         else:
             _place_picture(img, picture, ix, iy, iw, ih)
         x += bw
-    half = lower // 2
-    text_box(layout.info3, "info", x, y, x0 + w - x, half, heading=True, align="center")
-    text_box(layout.info4, "info", x, y + half, x0 + w - x, lower - half, heading=True, align="center")
+    yy = y
+    for i, slot in enumerate(stack):
+        hh = lower // len(stack) if i < len(stack) - 1 else y + lower - yy
+        text_box(slot, "info", x, yy, x0 + w - x, hh, heading=True, align="center")
+        yy += hh
     return payload
+
+# ---------------------------------------------------------------- user-built grid (rows & boxes)
+GRID_MAX_PT = {"small": 10.0, "medium": 16.0, "large": 24.0, "xl": 40.0, "auto": 28.0}
+GRID_MIN_PT = 6.0
+
+
+def _shares(weights: list[int], total: int) -> list[int]:
+    """Splits `total` dots by the relative weights; the last part takes the rounding remainder."""
+    s = sum(weights) or 1
+    out = [total * w // s for w in weights[:-1]]
+    return out + [total - sum(out)]
+
+
+def render_grid(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str, Any], config: RenderConfig,
+                box: tuple[int, int, int, int], dpi: int, picture: Image.Image | None, warn: Any) -> str | None:
+    """Rows of boxes as the user built them (spec.grid). Row heights and box widths are relative weights;
+    every box is outlined, has an optional heading strip, and shows a value, fixed text, the QR or the photo.
+    Text starts at the box's size cap and shrinks in 0.5 pt steps (wrapping to two lines last) to fit."""
+    spec, style = config.spec, config.spec.style
+    family = style.font
+    head_w, value_w = _weights(style)
+    x0, y0, w, h = box
+    rows = spec.grid.rows
+    payload: str | None = None
+    if not rows:
+        return payload
+    y = y0
+    for row, rh in zip(rows, _shares([r.height for r in rows], h), strict=True):
+        x = x0
+        for cell, cw in zip(row.cells, _shares([c.width for c in row.cells], w), strict=True):
+            _rect(draw, x, y, cw, rh)
+            left = top = 0
+            if cell.heading:
+                size = _dots(HEADING_PT, dpi)
+                a, d = load_font(family, head_w, size).getmetrics()
+                if rh >= 4 * (a + d + 4):
+                    top = _heading(draw, cell.heading, family, head_w, dpi, x, y, cw)
+                else:
+                    # A short box: the heading sits in a black strip on the left instead of on top.
+                    label = cell.heading.upper()
+                    left = min(cw // 2, _exact(family, head_w, size, label) + 2 * PAD)
+                    draw.rectangle([x, y, x + left - 1, y + rh - 1], fill=0)
+                    draw.text((x + PAD, y + (rh - (a + d)) // 2), label, font=load_font(family, head_w, size), fill=1,
+                              anchor="la")
+            ix, iy, iw, ih = x + left + PAD, y + top + PAD, cw - left - 2 * PAD, rh - top - 2 * PAD
+            if iw <= 0 or ih <= 0:
+                if cell.kind == "qr":
+                    warn("QR_TOO_SMALL")
+                elif (cell.kind == "text" and (cell.text or "").strip()) or (
+                        cell.kind == "field" and cell.key and value_for_key(cell.key, spec, snapshot)):
+                    warn("TEXT_TOO_LONG", cell.key if cell.kind == "field" else None)
+            else:
+                if cell.kind == "qr":
+                    payload = str(snapshot.get("generated", {}).get("qr_payload") or "")
+                    limit = MAX_QR_PAYLOAD_DATA if style.qr_content == "label_data" else MAX_QR_PAYLOAD
+                    if not payload or len(payload) > limit:
+                        warn("QR_PAYLOAD_TOO_LONG")
+                    else:
+                        side = min(iw, ih)
+                        code = _draw_qr(draw, payload, ix + (iw - side) // 2, iy + (ih - side) // 2, side)
+                        if code:
+                            warn(code)
+                elif cell.kind == "blank":
+                    pass  # a write-in space: the outline and heading only
+                elif cell.kind == "image":
+                    if snapshot.get("generated", {}).get("image_sha256"):
+                        if picture is None:
+                            warn("LABEL_IMAGE_MISSING")
+                        else:
+                            _place_picture(img, picture, ix, iy, iw, ih)
+                else:
+                    text = (cell.text or "").strip() if cell.kind == "text" else (
+                        value_for_key(cell.key, spec, snapshot) if cell.key else "")
+                    if text:
+                        weight = value_w if cell.bold else 400
+                        start = min(GRID_MAX_PT[cell.size], ih * 72 / dpi)
+                        fit = _fit_box(text, family, weight, start, GRID_MIN_PT, iw, ih, dpi, wrap=True)
+                        if fit is None:
+                            warn("TEXT_TOO_LONG", cell.key if cell.kind == "field" else None)
+                            fit = (GRID_MIN_PT, [text])
+                        _draw_lines(draw, fit[1], family, weight, fit[0], dpi, ix, iy, iw, ih, cell.align)
+            x += cw
+        y += rh
+    return payload
+
 
 # ---------------------------------------------------------------- render
 def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, printer: RenderPrinter,
@@ -559,13 +669,14 @@ def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, pri
         label = label or key or ""
         warnings.append(Warning(code, key, message_for(code, Field=label)))
 
-    if style.layout == "bin":
-        payload = render_bin(img, draw, snapshot, config, (cx, cy, cw, ch), dpi, picture, warn)
+    if style.layout in ("bin", "grid"):
+        draw_layout = render_grid if style.layout == "grid" else render_bin
+        payload = draw_layout(img, draw, snapshot, config, (cx, cy, cw, ch), dpi, picture, warn)
         for key in required_missing(spec, snapshot):
             warn("REQUIRED_VALUE_MISSING", f"manual.{key}")
         png = png_bytes(img)
         return RenderResult(png=png, sha256=sha256(png), fits=not warnings, warnings=warnings, width_dots=W,
-                            height_dots=H, qr_payload=payload, family="bin")
+                            height_dots=H, qr_payload=payload, family=style.layout)
 
     # 7.4 layout family.
     tx, ty, tw, th = cx, cy, cw, ch

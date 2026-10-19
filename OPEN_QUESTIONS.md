@@ -280,4 +280,17 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     `QR_TOO_SMALL`. With label data, scanners that type into Epicor will type all the lines; keep "Part number"
     for scan-to-system use. The Excel sheet encoded the bare part number via api.qrserver.com; the app makes the
     QR locally (offline) instead.
+94. **Rows & boxes label builder (owner's request, 2026-10-19).** `style.layout: "grid"` with `spec.grid.rows[]`:
+    each row has a relative height and 1–6 boxes with relative widths; a box shows a field, fixed text, the QR
+    code, the part's photo, or a blank write-in space, with an optional heading (a black strip on top, or on the
+    left when the box is short), a largest text size (auto/S/M/L/XL; text shrinks then wraps to fit), alignment
+    and bold. Editor: templates (Kanban card, Bin card, Simple, Blank), add/move/delete rows, add/remove boxes,
+    drag the dividers between boxes to resize. A QR box turns the QR code on. Boxes only appear when added, so
+    no empty sockets. The earlier fixed "bin" layout (#92) still renders for configs saved with it and opens in
+    the builder as rows & boxes. This replaces the "free-form designer" non-goal with a structured builder;
+    still no free positioning. No schema change.
+95. **Kanban card template.** Modelled on a supply-chain kanban card: Part description, Part number, Qty, Lead
+    time, Order date (write-in), Supplier, Due date (write-in), Planner, Card x of y, Location. Fields are matched
+    to custom fields by name (qty, lead, supplier/vendor, planner/buyer, location/supermarket/rack); "Card x of y"
+    is a print-time box sequence with noun CARD, numbered automatically when a set is printed.
 

@@ -68,8 +68,9 @@ class Style(_Strict):
     qr_position: Literal["left", "right"] = "right"
     # The part's picture (dithered to 1-bit): beside the text on wide labels, above it on tall ones.
     image_position: Literal["none", "left", "right"] = "none"
-    # "lines": automatic layout of spec.fields (section 7.4). "bin": the boxed bin-label grid (spec.bin).
-    layout: Literal["lines", "bin"] = "lines"
+    # "lines": automatic layout of spec.fields (section 7.4). "grid": rows of boxes built by the user
+    # (spec.grid). "bin": the earlier fixed bin-label grid (spec.bin), still rendered for configs saved with it.
+    layout: Literal["lines", "bin", "grid"] = "lines"
     # What the QR code holds: the part number (D13: PN:…) or every value printed on the label, one per line.
     qr_content: Literal["part_number", "label_data"] = "part_number"
 
@@ -102,14 +103,43 @@ class BinLayout(_Strict):
                 ("info3", self.info3), ("info4", self.info4)]
 
 
+class GridCell(_Strict):
+    """One box: a field value, fixed text, the QR code, the part's photo, or a blank write-in space (filled in
+    by hand, e.g. the order date on a kanban card), with an optional heading strip."""
+
+    kind: Literal["field", "text", "qr", "image", "blank"] = "field"
+    key: str | None = Field(default=None, max_length=80)
+    text: str | None = Field(default=None, max_length=60)
+    heading: str | None = Field(default=None, max_length=24)
+    width: int = Field(default=1, ge=1, le=100)  # share of the row (relative to the other boxes)
+    size: Literal["auto", "small", "medium", "large", "xl"] = "auto"  # largest text size; shrinks to fit
+    align: Literal["left", "center"] = "center"
+    bold: bool = True
+
+
+class GridRow(_Strict):
+    height: int = Field(default=1, ge=1, le=100)  # share of the label height (relative to the other rows)
+    cells: list[GridCell] = Field(min_length=1, max_length=6)
+
+
+class GridLayout(_Strict):
+    rows: list[GridRow] = Field(default_factory=list, max_length=8)
+
+    def cells(self) -> list[GridCell]:
+        return [c for r in self.rows for c in r.cells]
+
+
 class LabelSpec(_Strict):
     fields: list[SpecField] = Field(default_factory=list, max_length=9)
     manual_fields: list[ManualField] = Field(default_factory=list, max_length=20)
     style: Style = Field(default_factory=Style)
     bin: BinLayout = Field(default_factory=BinLayout)
+    grid: GridLayout = Field(default_factory=GridLayout)
 
     def printed_keys(self) -> list[str]:
-        """Field keys shown on the label, in order: the fields (lines layout) or the filled boxes (bin)."""
+        """Field keys shown on the label, in order: the fields (lines layout) or the filled boxes (bin, grid)."""
+        if self.style.layout == "grid":
+            return list(dict.fromkeys(c.key for c in self.grid.cells() if c.kind == "field" and c.key))
         if self.style.layout == "bin":
             keys = [s.key for _, s in self.bin.slots() if s.key]
             return list(dict.fromkeys(keys))
@@ -157,6 +187,14 @@ def validate_spec(spec: LabelSpec, custom_keys: set[str], qr_mode: str, serial_m
             raise ApiError("CONFIG_FIELD_UNKNOWN")
     if spec.style.layout == "bin" and any(s.key and not known(s.key) for _, s in spec.bin.slots()):
         raise ApiError("CONFIG_FIELD_UNKNOWN")
+    if spec.style.layout == "grid":
+        cells = spec.grid.cells()
+        if not cells:
+            raise ApiError("CONFIG_GRID_EMPTY")
+        if any(c.kind == "field" and c.key and not known(c.key) for c in cells):
+            raise ApiError("CONFIG_FIELD_UNKNOWN")
+        if any(c.kind == "qr" for c in cells) and qr_mode == "none":
+            raise ApiError("CONFIG_QR_BOX_NEEDS_QR")
     if any(counts[r] > limit for r, limit in ROLE_LIMITS.items()):
         raise ApiError("CONFIG_ROLE_LIMIT")
     if qr_mode == "serial" and serial_mode != "required":

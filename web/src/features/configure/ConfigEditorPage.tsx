@@ -10,7 +10,8 @@ import { ConfirmDialog } from "../../components/Overlay";
 import { api, ApiError } from "../../lib/api";
 import { qk, useSettings, useSizes } from "../../lib/queries";
 import { useCustomFields, usePart, type LabelStyle } from "../../lib/parts";
-import { BinSection, defaultBin, FieldsSection, LayoutSection, ManualSection, PictureSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
+import { FieldsSection, LayoutSection, ManualSection, PictureSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
+import { GridBuilder, gridTemplate, KANBAN_CARD_FIELD } from "./GridBuilder";
 import { PartPicker, type PickedPart } from "./PartPicker";
 import { useFirstActivePart } from "./ConfigureListPage";
 import { toDraft, type ConfigOut, type Draft } from "./types";
@@ -77,9 +78,12 @@ export function ConfigEditorPage() {
   if (!draft || !base.data) return <div className="p-8">{base.error && <Banner tone="danger">{base.error.message}</Banner>}</div>;
 
   const setStyle = (s: Partial<LabelStyle>) => setDraft({ ...draft, spec: { ...draft.spec, style: { ...draft.spec.style, ...s } } });
-  const isBin = draft.spec.style.layout === "bin";
-  const setLayout = (layout: "lines" | "bin") =>
-    setDraft({ ...draft, spec: { ...draft.spec, bin: draft.spec.bin ?? defaultBin(custom.data ?? []), style: { ...draft.spec.style, layout } } });
+  const isGrid = draft.spec.style.layout === "grid";
+  const setLayout = (layout: "lines" | "grid") => {
+    const grid = draft.spec.grid ?? gridTemplate("bin", custom.data ?? []);
+    const needsQr = layout === "grid" && grid.rows.some((r) => r.cells.some((c) => c.kind === "qr")) && draft.qr_mode === "none";
+    setDraft({ ...draft, ...(needsQr ? { qr_mode: "part" as const } : {}), spec: { ...draft.spec, grid, style: { ...draft.spec.style, layout } } });
+  };
   const nextVersion = base.data.next_version;
 
   const publish = async () => {
@@ -129,11 +133,32 @@ export function ConfigEditorPage() {
             <SizeSection sizes={(sizes.data ?? []).filter((s) => s.active)} value={draft.label_size_id} onChange={(id) => setDraft({ ...draft, label_size_id: id })} />
           </Section>
           <Section title="Layout" step={2} icon={Grid2x2} hint="Text lines, or a boxed bin-label grid">
-            <LayoutSection value={isBin ? "bin" : "lines"} onChange={setLayout} />
+            <LayoutSection
+              value={isGrid ? "grid" : "lines"}
+              onChange={setLayout}
+              onKanban={() => {
+                const grid = gridTemplate("kanban", custom.data ?? []);
+                const hasCounter = draft.spec.manual_fields.some((m) => m.type === "box_sequence");
+                setDraft({
+                  ...draft,
+                  spec: {
+                    ...draft.spec,
+                    grid,
+                    manual_fields: hasCounter ? draft.spec.manual_fields : [...draft.spec.manual_fields, KANBAN_CARD_FIELD],
+                    style: { ...draft.spec.style, layout: "grid" },
+                  },
+                });
+              }}
+            />
           </Section>
-          {isBin ? (
-            <Section title="Boxes" step={3} icon={LayoutList} hint="A heading and a field for each box">
-              <BinSection draft={draft} custom={custom.data ?? []} onChange={(bin) => setDraft({ ...draft, spec: { ...draft.spec, bin } })} />
+          {isGrid ? (
+            <Section title="Rows & boxes" step={3} icon={LayoutList} hint="Add rows, split them into boxes, pick what each box shows">
+              <GridBuilder
+                draft={draft}
+                custom={custom.data ?? []}
+                onChange={(grid, patch) => setDraft({ ...draft, ...patch, spec: { ...draft.spec, grid } })}
+                onManualFields={(manual_fields, grid) => setDraft({ ...draft, spec: { ...draft.spec, manual_fields, grid } })}
+              />
             </Section>
           ) : (
             <Section title="What's on the label" step={3} icon={LayoutList} hint="Pick the part details to print, biggest first">
@@ -149,7 +174,7 @@ export function ConfigEditorPage() {
               onChange={(patch, style) => setDraft({ ...draft, ...patch, spec: style ? { ...draft.spec, style: { ...draft.spec.style, ...style } } : draft.spec })}
             />
           </Section>
-          <Section title="Style" step={6} icon={Palette} hint={isBin ? "Font and weight" : "Font, weight, size and spacing"}>
+          <Section title="Style" step={6} icon={Palette} hint={isGrid ? "Font and weight" : "Font, weight, size and spacing"}>
             <StyleSection style={draft.spec.style} fonts={settings.data?.fonts_allowed ?? ["inter", "roboto_condensed", "atkinson"]} onChange={setStyle} />
           </Section>
           <Section title="Print-time fields" step={7} icon={TextCursorInput} hint="Typed in when printing, e.g. lot number or BOX 1/3">

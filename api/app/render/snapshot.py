@@ -56,7 +56,9 @@ def label_data(spec: LabelSpec, part_values: dict[str, Any], manual: dict[str, A
                print_date: str, labels: dict[str, str]) -> list[tuple[str, str]]:
     """(heading, value) for every value printed on the label, in label order, for the QR code."""
     out: list[tuple[str, str]] = []
-    if spec.style.layout == "bin":
+    if spec.style.layout == "grid":
+        items = [(c.key, (c.heading or "").strip()) for c in spec.grid.cells() if c.kind == "field" and c.key]
+    elif spec.style.layout == "bin":
         items = [(s.key, (s.heading or "").strip()) for _, s in spec.bin.slots() if s.key]
     else:
         items = [(f.key, "") for f in spec.fields]
@@ -146,7 +148,9 @@ def build_snapshot(spec: LabelSpec, qr_mode: str, part_values: dict[str, Any], c
     payload = qr_payload(qr_mode, str(part_values["part_number"]), serial, data)
     if payload is not None:
         generated["qr_payload"] = payload
-    if spec.style.image_position != "none" and part_values.get(IMAGE_KEY):
+    wants_image = (spec.style.image_position != "none" if spec.style.layout != "grid"
+                   else any(c.kind == "image" for c in spec.grid.cells()))
+    if wants_image and part_values.get(IMAGE_KEY):
         # The asset id is compared with part.image_asset_id by part_label_freshness (a new picture makes the
         # label out of date); the sha locates the content-addressed file for exact re-renders.
         part[IMAGE_KEY] = part_values[IMAGE_KEY]

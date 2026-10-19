@@ -220,3 +220,33 @@ async def test_settings_serial_lock_and_raise_only(admin: httpx.AsyncClient) -> 
 async def test_health(client: httpx.AsyncClient) -> None:
     r = await client.get(f"{V}/health")
     assert r.status_code == 200 and r.json()["db"] == "ok"
+
+
+async def test_server_console_password_reset(setup_done: dict[str, Any], new_client: Any) -> None:
+    """scripts/reset-password.ps1 → python -m app.reset_password: new password works, the account is unlocked,
+    old sessions end, and it's audited. Too-short passwords and unknown users change nothing."""
+    import pytest
+
+    from app.reset_password import ResetError, reset_in_db
+
+    old = new_client()
+    assert (await old.post(f"{V}/auth/login", json={"username": "admin", "password": PASSWORD})).status_code == 200
+    for _ in range(5):
+        await new_client().post(f"{V}/auth/login", json={"username": "admin", "password": "wrong-password!"})
+    new_password = "Brand-new pässword 42"
+    async with sessionmaker()() as db:
+        with pytest.raises(ResetError) as err:
+            await reset_in_db(db, "admin", "short")
+        assert err.value.code == 2
+        with pytest.raises(ResetError) as err:
+            await reset_in_db(db, "nobody", new_password)
+        assert err.value.code == 3 and "admin" in str(err.value)
+        user = await reset_in_db(db, "ADMIN", new_password)
+        await db.commit()
+        assert user.locked_until is None and user.failed_login_count == 0
+        assert (await db.execute(select(AuditLog.action).where(AuditLog.action == "user.password_reset"))
+                ).scalar() == "user.password_reset"
+    assert (await old.get(f"{V}/auth/me")).status_code == 401  # signed out everywhere
+    c = new_client()
+    assert (await c.post(f"{V}/auth/login", json={"username": "admin", "password": PASSWORD})).status_code == 401
+    assert (await c.post(f"{V}/auth/login", json={"username": "admin", "password": new_password})).status_code == 200

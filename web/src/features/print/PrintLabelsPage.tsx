@@ -1,3 +1,4 @@
+import { setCurrentLabelType, useCurrentLabelType, useLabelTypes } from "../../lib/labelTypes";
 import { Package } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -85,6 +86,7 @@ export function PrintLabelsPage() {
 
   return (
     <Page className="pb-28">
+      <LabelTypePicker />
       <SearchInput
         autoFocus
         placeholder="Search part number, label name or description"
@@ -193,3 +195,33 @@ export function PrintLabelsPage() {
   );
 }
 
+/** "Print as": which saved label type the Print buttons use (remembered on this computer). */
+function LabelTypePicker() {
+  const types = useLabelTypes();
+  const current = useCurrentLabelType();
+  const list = types.data ?? [];
+  if (list.length < 2) return null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <span className="t-body-strong text-text">Print as</span>
+      <div role="radiogroup" aria-label="Label type" className="flex flex-wrap gap-1.5">
+        {list.map((t) => {
+          const on = t.id === current?.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setCurrentLabelType(t.id)}
+              className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 t-button transition-colors duration-150 ${on ? "border-primary bg-primary text-white shadow-card" : "border-border-strong bg-surface text-text hover:bg-hover-fill"}`}
+            >
+              {t.name}
+              <span className={`t-caption ${on ? "text-white/80" : "text-text-muted"}`}>{sizeText(t.size)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

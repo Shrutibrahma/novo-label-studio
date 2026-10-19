@@ -1,6 +1,7 @@
 import { Button } from "../../components/Button";
 import { Banner, Mono } from "../../components/Display";
 import { LabelPreview, usePreview } from "../../components/LabelPreview";
+import { useCurrentLabelType } from "../../lib/labelTypes";
 import { Dialog } from "../../components/Overlay";
 import { sizeText } from "../../lib/format";
 import { usePart, type PartListItem } from "../../lib/parts";
@@ -10,7 +11,8 @@ const QR_WORD = { none: "None", part: "Part", serial: "Serial" } as const;
 /** 12.5 Preview dialog: read-only, width 720. */
 export function PreviewDialog({ part, onClose, onPrint }: { part: PartListItem; onClose: () => void; onPrint: () => void }) {
   const detail = usePart(part.id);
-  const preview = usePreview({ part_id: part.id }, 0);
+  const labelType = useCurrentLabelType();
+  const preview = usePreview({ part_id: part.id, label_type_id: labelType?.id }, 0);
   const cfg = detail.data?.config;
   const warnings = preview.data?.warnings ?? [];
   return (

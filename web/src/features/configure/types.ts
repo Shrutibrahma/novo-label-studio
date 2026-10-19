@@ -3,6 +3,8 @@ import { binToGrid } from "./GridBuilder";
 
 export interface ConfigOut {
   id: string;
+  label_type_id: string;
+  label_type_name: string;
   config_key: string;
   version: number;
   scope: "default" | "part";

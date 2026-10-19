@@ -46,6 +46,8 @@ ERRORS: dict[str, tuple[int, str]] = {
     "LABEL_IMAGE_MISSING": (422, "This part's picture can't be found. Upload it again on the part."),
     "CONFIG_IMAGE_QR_SAME_SIDE": (422, "The picture and the QR code can't be on the same side."),
     "CONFIG_GRID_EMPTY": (422, "Add at least one box to the label."),
+    "LABEL_TYPE_EXISTS": (409, "A label type with this name already exists."),
+    "LABEL_TYPE_LAST": (422, "Keep at least one label type."),
     "CONFIG_QR_BOX_NEEDS_QR": (422, "Turn on the QR code (QR code & serial) to use a QR box."),
     "QR_PAYLOAD_TOO_LONG": (422, "This part number is too long for the QR code."),
     "REQUIRED_VALUE_MISSING": (422, "Enter {Field} to print."),

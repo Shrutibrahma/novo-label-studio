@@ -200,9 +200,20 @@ class SerialSequence(Base):
     updated_at: Mapped[datetime] = _ts_updated()
 
 
+class LabelType(Base):
+    __tablename__ = "label_type"
+    id: Mapped[uuid.UUID] = _pk()
+    name: Mapped[str] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, server_default=DB_DEFAULT)
+    archived: Mapped[bool] = mapped_column(Boolean, server_default=DB_DEFAULT)
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("app_user.id"))
+    created_at: Mapped[datetime] = _ts()
+
+
 class LabelConfig(Base):
     __tablename__ = "label_config"
     id: Mapped[uuid.UUID] = _pk()
+    label_type_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("label_type.id"))
     config_key: Mapped[uuid.UUID] = mapped_column(Uuid)
     version: Mapped[int] = mapped_column(Integer)
     scope: Mapped[str] = mapped_column(Text)

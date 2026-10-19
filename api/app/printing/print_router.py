@@ -54,6 +54,7 @@ class ItemIn(BaseModel):
 
 class PrintIn(BaseModel):
     printer_id: uuid.UUID | None = None
+    label_type_id: uuid.UUID | None = None  # the first label type when omitted
     items: list[ItemIn] = Field(min_length=1, max_length=200)
     # "I've loaded {size} labels" (12.6 step 6): confirms the loaded size and records it on the printer.
     loaded_size_confirmed: bool = False
@@ -106,7 +107,7 @@ async def plan_items(db: AsyncSession, body: PrintIn, labels_for: dict[str, str]
         part = await db.get(Part, item.part_id)
         if part is None or part.status != "active":
             raise ApiError("NOT_FOUND")
-        cfg = await effective_config(db, part.id)
+        cfg = await effective_config(db, part.id, body.label_type_id)
         spec = parse_spec(cfg.spec)
         size = await db.get(LabelSize, cfg.label_size_id)
         assert size is not None

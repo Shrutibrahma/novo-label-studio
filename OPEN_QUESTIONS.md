@@ -293,4 +293,13 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     time, Order date (write-in), Supplier, Due date (write-in), Planner, Card x of y, Location. Fields are matched
     to custom fields by name (qty, lead, supplier/vendor, planner/buyer, location/supermarket/rack); "Card x of y"
     is a print-time box sequence with noun CARD, numbered automatically when a set is printed.
+96. **Saved label types (D11 changed, schema change approved by the owner, 2026-10-19; migration 0003).** New
+    table `label_type` (name unique among active types, sort order, archived); `label_config.label_type_id`
+    (NOT NULL) with one current default per type and one current override per (type, part). Existing configs
+    became the type "Label"; first-run setup creates it. API: `GET/POST /label-types`, `PATCH
+    /label-types/{id}`, `POST /label-types/{id}/archive` (never the last); a new type copies another type's
+    current design as its version 1. `type_id` / `label_type_id` on config reads/publishes, preview, part detail,
+    the Print dialog's saved selection and `POST /print` (omitted = the first type, so older clients keep
+    working). Archived types vanish from Configure and Print, but their configs stay, so history and exact
+    reprints are unaffected; History shows the type. Print Labels remembers the chosen type per browser.
 

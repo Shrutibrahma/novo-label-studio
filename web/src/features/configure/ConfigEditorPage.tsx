@@ -1,13 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleCheck, Eye, Grid2x2, Image as ImageIcon, LayoutList, Palette, QrCode, Ruler, TextCursorInput, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useBlocker, useNavigate, useParams } from "react-router";
+import { useBlocker, useNavigate, useParams, useSearchParams } from "react-router";
 import { usePage } from "../../app/page";
 import { Button } from "../../components/Button";
 import { Banner } from "../../components/Display";
 import { LabelPreview, usePreview } from "../../components/LabelPreview";
 import { ConfirmDialog } from "../../components/Overlay";
 import { api, ApiError } from "../../lib/api";
+import { labelTypesKey, useLabelTypes } from "../../lib/labelTypes";
 import { qk, useSettings, useSizes } from "../../lib/queries";
 import { useCustomFields, usePart, type LabelStyle } from "../../lib/parts";
 import { FieldsSection, LayoutSection, ManualSection, PictureSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
@@ -22,7 +23,13 @@ const EDITOR_IGNORED = new Set(["REQUIRED_VALUE_MISSING"]);
 /** 12.11 editor: /configure/default and /configure/part/:id. */
 export function ConfigEditorPage() {
   usePage("Configure");
-  const { partId } = useParams();
+  const { partId, typeId: typeParam } = useParams();
+  const [search] = useSearchParams();
+  const types = useLabelTypes();
+  // /configure/type/:typeId, /configure/part/:partId?type=..., or /configure/default (the first type).
+  const typeId = typeParam ?? search.get("type") ?? undefined;
+  const labelType = (types.data ?? []).find((t) => t.id === typeId) ?? (typeId ? undefined : types.data?.[0]);
+  const typeQuery = typeId ? `type_id=${typeId}` : "";
   const scope: "default" | "part" = partId ? "part" : "default";
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -33,8 +40,8 @@ export function ConfigEditorPage() {
   const first = useFirstActivePart();
 
   const base = useQuery({
-    queryKey: qk.config(partId ? `part-${partId}` : "default"),
-    queryFn: () => api<ConfigOut>(partId ? `/parts/${partId}/config` : "/configs/default"),
+    queryKey: qk.config(`${partId ? `part-${partId}` : "default"}:${typeId ?? "first"}`),
+    queryFn: () => api<ConfigOut>(partId ? `/parts/${partId}/config?${typeQuery}` : `/configs/default?${typeQuery}`),
     staleTime: 0,
   });
 
@@ -91,13 +98,14 @@ export function ConfigEditorPage() {
     setError(null);
     try {
       await api<ConfigOut>("/configs", {
-        body: { scope, part_id: partId ?? null, ...draft, base_config_id: base.data.id },
+        body: { scope, part_id: partId ?? null, ...draft, base_config_id: base.data.id, label_type_id: base.data.label_type_id },
       });
       allowLeave.current = true;
       setPublished(true);
       void qc.invalidateQueries({ queryKey: qk.configs });
       void qc.invalidateQueries({ queryKey: ["config"] });
       void qc.invalidateQueries({ queryKey: ["parts"] });
+      void qc.invalidateQueries({ queryKey: labelTypesKey });
       if (partId) void qc.invalidateQueries({ queryKey: qk.part(partId) });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
@@ -110,7 +118,12 @@ export function ConfigEditorPage() {
     <div className="flex max-w-[1440px] flex-col">
       <div className="flex items-center gap-3 border-b border-border bg-surface px-8 py-4">
         <div className="flex min-w-0 flex-1 flex-col">
-          <h2 className="t-h2 text-text">{title}</h2>
+          <h2 className="inline-flex items-center gap-2 t-h2 text-text">
+            {title}
+            {(types.data?.length ?? 0) > 1 && (labelType || base.data.label_type_name) && (
+              <span className="inline-flex h-6 items-center rounded-full bg-primary-subtle px-2.5 t-caption text-primary">{labelType?.name ?? base.data.label_type_name}</span>
+            )}
+          </h2>
           <p className="t-small text-text-muted">
             {dirty ? "Unsaved changes. Publish to use them for printing; older labels keep their version." : `Version ${nextVersion - 1} is live. Change anything below and watch the preview.`}
           </p>

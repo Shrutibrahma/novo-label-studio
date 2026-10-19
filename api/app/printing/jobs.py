@@ -14,6 +14,7 @@ from app.auth.sessions import now_utc
 from app.config import APP_VERSION
 from app.configs.defaults import DEFAULT_SIZE_NAME
 from app.errors import ApiError
+from app.configs.effective import current_default
 from app.models import IssuedSerial, LabelConfig, LabelSize, Printer, PrintAgent, PrintedLabel, PrintJob
 from app.printing.status import assert_can_print
 from app.render.canvas import canvas_for
@@ -118,7 +119,7 @@ async def print_test_label(printer_id: uuid.UUID, request: Request, user: Admin,
     if size is None:
         # No size confirmed as loaded yet: use the default label's size, else the Large preset.
         size = (await db.execute(select(LabelSize).join(LabelConfig, LabelConfig.label_size_id == LabelSize.id)
-                                 .where(LabelConfig.scope == "default", LabelConfig.is_current.is_(True)))
+                                 .where(LabelConfig.id == (await current_default(db)).id))
                 ).scalar_one_or_none() or (await db.execute(
                     select(LabelSize).where(LabelSize.name == DEFAULT_SIZE_NAME))).scalar_one()
     zone = request_zone(request)

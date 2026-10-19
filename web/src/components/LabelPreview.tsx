@@ -24,6 +24,7 @@ export interface PreviewResult {
 export interface PreviewRequest {
   part_id: string;
   config_id?: string;
+  label_type_id?: string;
   config?: { label_size_id: string; spec: unknown; qr_mode: string; serial_mode: string };
   manual_values?: Record<string, unknown>;
 }

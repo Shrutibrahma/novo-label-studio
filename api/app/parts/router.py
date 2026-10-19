@@ -306,9 +306,10 @@ async def get_part(db: AsyncSession, part_id: uuid.UUID, lock: bool = False) -> 
     return part
 
 
-async def part_detail(db: AsyncSession, part: Part) -> PartDetail:
+async def part_detail(db: AsyncSession, part: Part, type_id: uuid.UUID | None = None) -> PartDetail:
+    """`config` is the part's effective config for that label type (the first type when not given)."""
     aliases = await aliases_of(db, part.id)
-    cfg = await effective_config(db, part.id)
+    cfg = await effective_config(db, part.id, type_id)
     fresh = (await db.execute(text("SELECT label_state, last_printed_at FROM part_label_freshness "
                                    "WHERE part_id = :p"), {"p": part.id})).one()
     label = next((a.alias for a in aliases if a.is_label_name), None)
@@ -324,8 +325,8 @@ async def part_detail(db: AsyncSession, part: Part) -> PartDetail:
 
 
 @router.get("/parts/{part_id}", response_model=PartDetail)
-async def read_part(part_id: uuid.UUID, _: AnyUser, db: DB) -> PartDetail:
-    return await part_detail(db, await get_part(db, part_id))
+async def read_part(part_id: uuid.UUID, _: AnyUser, db: DB, type_id: uuid.UUID | None = None) -> PartDetail:
+    return await part_detail(db, await get_part(db, part_id), type_id)
 
 
 # ---------------------------------------------------------------- create / update

@@ -22,6 +22,7 @@ router = APIRouter(prefix="/render", tags=["render"])
 
 class PreviewIn(BaseModel):
     part_id: uuid.UUID
+    label_type_id: uuid.UUID | None = None
     config_id: uuid.UUID | None = None
     config: DraftConfig | None = None
     manual_values: dict[str, Any] | None = None
@@ -53,7 +54,7 @@ async def preview(body: PreviewIn, request: Request, _: AnyUser, db: DB) -> Prev
         await checked_spec(db, body.config.spec, body.config.qr_mode, body.config.serial_mode)
         cfg = ConfigLike(body.config.label_size_id, body.config.spec, body.config.qr_mode, body.config.serial_mode)
     else:
-        stored = await db.get(LabelConfig, body.config_id) if body.config_id else await effective_config(db, part.id)
+        stored = await db.get(LabelConfig, body.config_id) if body.config_id else await effective_config(db, part.id, body.label_type_id)
         if stored is None:
             raise ApiError("NOT_FOUND")
         cfg = ConfigLike(stored.label_size_id, stored.spec, stored.qr_mode, stored.serial_mode)

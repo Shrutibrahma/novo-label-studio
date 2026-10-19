@@ -22,6 +22,7 @@ from app.auth.sessions import now_utc
 from app.configs.spec import parse_spec
 from app.errors import ApiError
 from app.models import (
+    LabelType,
     IssuedSerial,
     LabelConfig,
     LabelSize,
@@ -101,6 +102,7 @@ class LabelDetail(BaseModel):
     dpi: int
     printer_dpi: int
     config_version: int
+    label_type: str
     qr_payload: str | None
     fields: list[SnapshotField]
     job: JobInfo
@@ -287,7 +289,8 @@ async def label_detail(label_id: uuid.UUID, _: AnyUser, db: DB) -> LabelDetail:
     return LabelDetail(
         row=row, bitmap_png_base64=base64.b64encode(label.bitmap_png).decode("ascii"), width_dots=img.size[0],
         height_dots=img.size[1], dpi=label.dpi, printer_dpi=default_printer.dpi if default_printer else label.dpi,
-        config_version=cfg.version, qr_payload=label.qr_payload, fields=fields,
+        config_version=cfg.version, label_type=(await db.get(LabelType, cfg.label_type_id)).name,  # type: ignore[union-attr]
+        qr_payload=label.qr_payload, fields=fields,
         job=JobInfo(id=str(job.id), printer=printer.name if printer else "", status=job.status, error=job.error,
                     reprint_reason=job.reprint_reason, timeline=timeline),
         reprints=[history_row(r) for r in reprint_rows if str(r.id) != str(label.id)],

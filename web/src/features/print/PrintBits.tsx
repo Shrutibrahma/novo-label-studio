@@ -32,12 +32,12 @@ export type Outcome =
 export function usePrintRunner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const run = async (items: PrintItem[], loadedSizeConfirmed: boolean): Promise<Outcome | null> => {
+  const run = async (items: PrintItem[], loadedSizeConfirmed: boolean, labelTypeId?: string): Promise<Outcome | null> => {
     setBusy(true);
     setError(null);
     try {
       const res = await api<PrintResponse>("/print", {
-        body: { items, loaded_size_confirmed: loadedSizeConfirmed },
+        body: { items, loaded_size_confirmed: loadedSizeConfirmed, label_type_id: labelTypeId ?? null },
         headers: { "Idempotency-Key": newIdempotencyKey() },
       });
       const jobs = await waitForJobs(res.jobs.map((j) => j.id), () => undefined);

@@ -5,6 +5,7 @@ import { Button } from "../../components/Button";
 import { Badge, Mono } from "../../components/Display";
 import { NumberStepper } from "../../components/Form";
 import { LabelPreview, type PreviewResult } from "../../components/LabelPreview";
+import { useCurrentLabelType } from "../../lib/labelTypes";
 import { api } from "../../lib/api";
 import { useDebounced, type PartDetail, type PartListItem } from "../../lib/parts";
 import { qk, useDefaultPrinter } from "../../lib/queries";
@@ -19,6 +20,7 @@ interface RowState {
 
 /** 12.6 batch mode (from "Print selected"). Each part prints with its saved label. */
 export function BatchPrint({ parts, onClose }: { parts: PartListItem[]; onClose: () => void }) {
+  const labelType = useCurrentLabelType();
   const qc = useQueryClient();
   const { printer } = useDefaultPrinter();
   const [ids, setIds] = useState(parts.map((p) => p.id));
@@ -34,8 +36,8 @@ export function BatchPrint({ parts, onClose }: { parts: PartListItem[]; onClose:
     queries: ids.map((id) => {
       const manual = debouncedRows[id]?.manual ?? {};
       return {
-        queryKey: ["preview", "batch", id, manual],
-        queryFn: () => api<PreviewResult>("/render/preview", { body: { part_id: id, manual_values: manual } }),
+        queryKey: ["preview", "batch", labelType?.id, id, manual],
+        queryFn: () => api<PreviewResult>("/render/preview", { body: { part_id: id, manual_values: manual, label_type_id: labelType?.id ?? null } }),
         staleTime: 60_000,
       };
     }),
@@ -66,7 +68,7 @@ export function BatchPrint({ parts, onClose }: { parts: PartListItem[]; onClose:
       quantity: distinct(id),
       manual_values: rows[id]?.manual ?? {},
     }));
-    const result = await runner.run(items, sizeConfirmed);
+    const result = await runner.run(items, sizeConfirmed, labelType?.id);
     if (result) {
       setOutcome(result);
       void qc.invalidateQueries({ queryKey: ["parts"] });

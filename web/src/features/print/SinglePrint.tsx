@@ -9,6 +9,7 @@ import { api } from "../../lib/api";
 import { inches } from "../../lib/format";
 import { qk, useDefaultPrinter, useSizes } from "../../lib/queries";
 import { useCustomFields, type LabelSpec, type PartDetail, type SpecField } from "../../lib/parts";
+import { useCurrentLabelType } from "../../lib/labelTypes";
 import { defaultRole, fieldName } from "../configure/types";
 import { printBlock } from "./blocking";
 import { ManualInputs, PrinterLine, ResultPanel, SizeBanner, usePrintRunner, type Outcome, type PrintItem } from "./PrintBits";
@@ -60,6 +61,7 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
   );
   const boxIndex = boxMode === "all" ? 1 : boxNumber;
   const manualForPreview = box ? { ...manual, [box.key]: { index: boxIndex, total: boxTotal } } : manual;
+  const labelType = useCurrentLabelType();
   const preview = usePreview({ part_id: part.id, config: draft, manual_values: manualForPreview }, 250);
 
   const size = sizes.data?.find((s) => s.id === sizeId) ?? cfg.size;
@@ -91,11 +93,11 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
 
   const print = async (start = box && boxMode === "one" ? boxNumber : 1, count = box ? (boxMode === "all" ? boxTotal : 1) : 1, gid = groupId) => {
     if (selectionChanged) {
-      await api(`/parts/${part.id}/selection`, { method: "PUT", body: { fields, label_size_id: sizeId, emphasis } });
+      await api(`/parts/${part.id}/selection`, { method: "PUT", body: { fields, label_size_id: sizeId, emphasis, label_type_id: labelType?.id ?? null } });
       setSaved(true);
       void qc.invalidateQueries({ queryKey: qk.part(part.id) });
     }
-    const result = await runner.run(items(start, count, gid), sizeConfirmed);
+    const result = await runner.run(items(start, count, gid), sizeConfirmed, labelType?.id);
     if (result) {
       setOutcome(result);
       if (result.kind === "sent") {

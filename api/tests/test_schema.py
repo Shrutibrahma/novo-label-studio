@@ -37,8 +37,9 @@ async def base() -> dict[str, uuid.UUID]:
                    "VALUES ('NP-10421', 'Bearing Housing', :u, :u) RETURNING id", u=uid)
     other = await q("INSERT INTO part (part_number, part_name, created_by, updated_by) "
                     "VALUES ('NP-20000', 'Other', :u, :u) RETURNING id", u=uid)
-    cfg = await q("INSERT INTO label_config (config_key, version, scope, label_size_id, spec, created_by) "
-                  "VALUES (gen_random_uuid(), 1, 'default', :s, '{}', :u) RETURNING id", s=size, u=uid)
+    ltype = await q("INSERT INTO label_type (name, created_by) VALUES ('Label', :u) RETURNING id", u=uid)
+    cfg = await q("INSERT INTO label_config (label_type_id, config_key, version, scope, label_size_id, spec, created_by) "
+                  "VALUES (:t, gen_random_uuid(), 1, 'default', :s, '{}', :u) RETURNING id", t=ltype, s=size, u=uid)
     agent = await q("INSERT INTO print_agent (name, token_hash) VALUES ('a', 'x') RETURNING id")
     printer = await q("INSERT INTO printer (name, model, print_method, dpi, print_width_in, media_min_width_in, "
                       "media_max_width_in, agent_id) VALUES ('p', 'Zebra ZQ630 Plus', 'direct_thermal', 203, "
@@ -47,7 +48,7 @@ async def base() -> dict[str, uuid.UUID]:
                   "VALUES (gen_random_uuid(), 'print', '{}', :u) RETURNING id", u=uid)
     job = await q("INSERT INTO print_job (request_id, seq_in_request, printer_id, kind, payload_zpl, created_by) "
                   "VALUES (:r, 1, :p, 'print', '\\x5e5841'::bytea, :u) RETURNING id", r=req, p=printer, u=uid)
-    return {"user": uid, "size": size, "part": part, "other": other, "config": cfg, "printer": printer,
+    return {"user": uid, "size": size, "part": part, "other": other, "config": cfg, "printer": printer, "type": ltype,
             "job": job, "request": req}
 
 
@@ -64,7 +65,7 @@ async def insert_label(b: dict[str, uuid.UUID], seq: int, snapshot: str = '{"par
 async def test_schema_objects_exist(base: dict[str, uuid.UUID]) -> None:
     n = await q("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' "
                 "AND table_type='BASE TABLE' AND table_name <> 'alembic_version'")
-    assert n == 21
+    assert n == 22  # schema.sql (21) + label_type (migration 0003)
     assert await q("SELECT count(*) FROM part_label_freshness") == 2
     assert await q("SELECT normalize_alias('10-32 X 1/2  16')") == "10 32 x 1/2 16"
 
@@ -130,13 +131,22 @@ async def test_group_index_cannot_exceed_total(base: dict[str, uuid.UUID]) -> No
                 "exceeds group total", j=base["job"], p=base["part"], c=base["config"], g=group)
 
 
-async def test_single_current_default_config(base: dict[str, uuid.UUID]) -> None:
+async def test_single_current_default_config_per_type(base: dict[str, uuid.UUID]) -> None:
+    await fails("INSERT INTO label_config (label_type_id, config_key, version, scope, label_size_id, spec, created_by) "
+                "VALUES (:t, gen_random_uuid(), 1, 'default', :s, '{}', :u)", "label_config_current_default_uq",
+                t=base["type"], s=base["size"], u=base["user"])
+    # Another label type has its own current default; type names are unique (case-insensitive).
+    bin_type = await q("INSERT INTO label_type (name, created_by) VALUES ('Bin', :u) RETURNING id", u=base["user"])
+    await q("INSERT INTO label_config (label_type_id, config_key, version, scope, label_size_id, spec, created_by) "
+            "VALUES (:t, gen_random_uuid(), 1, 'default', :s, '{}', :u) RETURNING id",
+            t=bin_type, s=base["size"], u=base["user"])
+    await fails("INSERT INTO label_type (name, created_by) VALUES (' bin ', :u)", "label_type_name_uq", u=base["user"])
     await fails("INSERT INTO label_config (config_key, version, scope, label_size_id, spec, created_by) "
-                "VALUES (gen_random_uuid(), 1, 'default', :s, '{}', :u)", "label_config_current_default_uq",
+                "VALUES (gen_random_uuid(), 1, 'default', :s, '{}', :u)", "label_type_id",
                 s=base["size"], u=base["user"])
 
 
 async def test_serial_qr_needs_serial(base: dict[str, uuid.UUID]) -> None:
-    await fails("INSERT INTO label_config (config_key, version, scope, part_id, label_size_id, spec, qr_mode, "
-                "created_by) VALUES (gen_random_uuid(), 1, 'part', :p, :s, '{}', 'serial', :u)",
-                "label_config_check", p=base["part"], s=base["size"], u=base["user"])
+    await fails("INSERT INTO label_config (label_type_id, config_key, version, scope, part_id, label_size_id, spec, "
+                "qr_mode, created_by) VALUES (:t, gen_random_uuid(), 1, 'part', :p, :s, '{}', 'serial', :u)",
+                "label_config_check", t=base["type"], p=base["part"], s=base["size"], u=base["user"])

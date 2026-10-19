@@ -51,6 +51,7 @@ export const router = createBrowserRouter([
               { path: "/parts/import", element: <ImportPage /> },
               { path: "/configure", element: <ConfigureListPage /> },
               { path: "/configure/default", element: <ConfigEditorPage /> },
+              { path: "/configure/type/:typeId", element: <ConfigEditorPage /> },
               { path: "/configure/part/:partId", element: <ConfigEditorPage /> },
               { path: "/settings", element: <Navigate to="/settings/general" replace /> },
               { path: "/settings/:tab", element: <SettingsPage /> },

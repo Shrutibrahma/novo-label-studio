@@ -22,7 +22,7 @@ from app.configs.defaults import (
     SETTING_COMPANY,
 )
 from app.errors import ApiError, field_error
-from app.models import AppSetting, AppUser, LabelConfig, LabelSize, Printer, PrintAgent, SerialSequence
+from app.models import AppSetting, AppUser, LabelConfig, LabelSize, LabelType, PrintAgent, Printer, SerialSequence
 from app.printing.agent_auth import issue_token
 
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -124,7 +124,10 @@ async def run_setup(body: SetupIn, request: Request, response: Response, db: DB)
     audit(db, admin.id, "printer.update", "printer", printer.id, None,
           {k: v for k, v in PRINTER_PROFILE.items()} | {"agent_id": agent.id, "is_default": True})
 
-    config = LabelConfig(config_key=uuid.uuid4(), version=1, scope="default", part_id=None,
+    label_type = LabelType(name="Label", sort_order=0, created_by=admin.id)
+    db.add(label_type)
+    await db.flush()
+    config = LabelConfig(label_type_id=label_type.id, config_key=uuid.uuid4(), version=1, scope="default", part_id=None,
                          label_size_id=sizes[DEFAULT_SIZE_NAME].id, spec=DEFAULT_SPEC, qr_mode="none",
                          serial_mode="none", serial_sequence_id=None, created_by=admin.id)
     db.add(config)

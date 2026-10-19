@@ -4,7 +4,12 @@ import { Skeleton } from "../../components/Display";
 import { Dialog } from "../../components/Overlay";
 import { useDefaultPrinter } from "../../lib/queries";
 import { printerBlockMessage } from "../../lib/status";
-import { usePart, type PartListItem } from "../../lib/parts";
+import type { PartListItem } from "../../lib/parts";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../../lib/api";
+import { useCurrentLabelType } from "../../lib/labelTypes";
+import { qk } from "../../lib/queries";
+import type { PartDetail } from "../../lib/parts";
 import { BatchPrint } from "./BatchPrint";
 import { PreviewDialog } from "./PreviewDialog";
 import { SinglePrint } from "./SinglePrint";
@@ -26,7 +31,12 @@ export function PrintRowActions({ part, onLaunch }: { part: PartListItem; onLaun
 }
 
 function SingleHost({ part, onClose }: { part: PartListItem; onClose: () => void }) {
-  const detail = usePart(part.id);
+  const type = useCurrentLabelType();
+  // The part's design for the label type chosen on Print Labels.
+  const detail = useQuery({
+    queryKey: [...qk.part(part.id), type?.id ?? "first"],
+    queryFn: () => api<PartDetail>(`/parts/${part.id}${type ? `?type_id=${type.id}` : ""}`),
+  });
   return detail.data ? <SinglePrint part={detail.data} onClose={onClose} /> : <Skeleton className="h-[460px] w-full" />;
 }
 

@@ -68,7 +68,7 @@ These decisions are final for v1. Changing one requires editing this table first
 | D8 | Unique part key: `part_number`, normalized as upper(trim) | Deterministic diff and duplicate detection |
 | D9 | Imports never delete parts; parts missing from a file are proposed as `inactive` | No silent data loss |
 | D10 | Label names (aliases) live outside imported data; one alias maps to exactly one part; one alias per part is its printable `label_name` | Survives re-import; lookups are unambiguous |
-| D11 | Config scope: one global default + optional per-part override; every change creates a new immutable version | Exact reprints; no label "types" to choose |
+| D11 | Config scope: saved label types (e.g. Label, Bin, Rack, Workstation, Kanban), each with one default + optional per-part override; every change creates a new immutable version. Printing picks a type (the first by default). Originally one global default with "no label types to choose"; changed 2026-10-19 at the owner's request (migration 0003) | Exact reprints; each physical label kind keeps its own size and design |
 | D12 | Serial format default `NOVO-` + 8 digits, one global sequence, never reset, never reused | Simplest safe scheme |
 | D13 | QR modes: `none`, `part` (encodes part number), `serial` (encodes serial + part). Plain text, no URLs. Optionally (label setting "All label data", added 2026-10-06 at the owner's request) every value printed on the label follows, one `HEADING: value` per line | No resolver exists; scans must be readable offline |
 | D14 | Box groups are separate from serials; each label in a group still gets its own serial | A serial identifies one physical label |

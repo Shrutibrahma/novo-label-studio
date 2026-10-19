@@ -226,7 +226,7 @@ export function FieldsSection({ draft, onFields, custom }: { draft: Draft; onFie
 }
 
 /** Section "Layout": automatic lines, or rows & boxes built in the editor. */
-export function LayoutSection({ value, onChange, onKanban }: { value: "lines" | "grid"; onChange: (v: "lines" | "grid") => void; onKanban: () => void }) {
+export function LayoutSection({ value, onChange, onQuickStart }: { value: "lines" | "grid"; onChange: (v: "lines" | "grid") => void; onQuickStart: (t: "tps" | "kanban") => void }) {
   const card = (v: "lines" | "grid", title: string, body: string, art: ReactNode) => (
     <button
       type="button"
@@ -262,25 +262,25 @@ export function LayoutSection({ value, onChange, onKanban }: { value: "lines" | 
         </span>
       ))}
     </div>
-    <button
-      type="button"
-      onClick={onKanban}
-      className="flex items-center gap-3 rounded-[8px] border border-dashed border-border-strong bg-surface p-3 text-left transition-colors duration-150 hover:border-primary hover:bg-primary-subtle"
-    >
-      <span className="grid h-10 w-14 shrink-0 grid-cols-3 grid-rows-3 gap-[2px] rounded-[4px] border border-border-strong bg-surface p-[2px]" aria-hidden>
-        <span className="col-span-2 rounded-[1px] border border-text-muted" />
-        <span className="rounded-[1px] border border-text-muted" />
-        <span className="rounded-[1px] border border-text-muted" />
-        <span className="rounded-[1px] border border-text-muted" />
-        <span className="rounded-[1px] border border-dashed border-text-muted" />
-        <span className="col-span-2 rounded-[1px] border border-text-muted" />
-        <span className="rounded-[1px] border border-text-muted" />
-      </span>
-      <span className="flex flex-col">
-        <span className="t-body-strong text-text">Kanban card</span>
-        <span className="t-caption text-text-secondary">Part, qty, lead time, supplier, planner, location, write-in order and due dates, Card 1 of N</span>
-      </span>
-    </button>
+    <div className="flex flex-col gap-1.5">
+      <span className="t-caption text-text-muted uppercase">Quick start</span>
+      {(
+        [
+          ["tps", "Standard TPS card", "Process · Part # · Location, big destination code, lot size / min / max, QR bottom-right"],
+          ["kanban", "Kanban card", "Part, qty, lead time, supplier, planner, location, write-in dates, Card 1 of N"],
+        ] as const
+      ).map(([t, title, body]) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => onQuickStart(t)}
+          className="flex flex-col rounded-[8px] border border-dashed border-border-strong bg-surface px-3 py-2.5 text-left transition-colors duration-150 hover:border-primary hover:bg-primary-subtle"
+        >
+          <span className="t-body-strong text-text">{title}</span>
+          <span className="t-caption text-text-secondary">{body}</span>
+        </button>
+      ))}
+    </div>
     </div>
   );
 }

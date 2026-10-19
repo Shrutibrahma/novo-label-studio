@@ -115,7 +115,7 @@ export function ConfigEditorPage() {
   };
   const title = partId ? `Custom label for ${part.data?.part_number ?? ""}` : "Default label";
   return (
-    <div className="flex max-w-[1440px] flex-col">
+    <div className="flex max-w-[1440px] flex-col overflow-hidden" style={{ height: "calc(100vh - 56px)" }}>
       <div className="flex items-center gap-3 border-b border-border bg-surface px-8 py-4">
         <div className="flex min-w-0 flex-1 flex-col">
           <h2 className="inline-flex items-center gap-2 t-h2 text-text">
@@ -140,8 +140,8 @@ export function ConfigEditorPage() {
           <Banner tone="danger">{error}</Banner>
         </div>
       )}
-      <div className="flex items-start">
-        <div className="flex w-[460px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-border p-4" style={{ maxHeight: "calc(100vh - 56px - 77px)" }}>
+      <div className="flex min-h-0 flex-1">
+        <div className="flex w-[460px] shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain border-r border-border p-4">
           <Section title="Size" step={1} icon={Ruler} hint="The label roll loaded in the printer">
             <SizeSection sizes={(sizes.data ?? []).filter((s) => s.active)} value={draft.label_size_id} onChange={(id) => setDraft({ ...draft, label_size_id: id })} />
           </Section>
@@ -149,17 +149,14 @@ export function ConfigEditorPage() {
             <LayoutSection
               value={isGrid ? "grid" : "lines"}
               onChange={setLayout}
-              onKanban={() => {
-                const grid = gridTemplate("kanban", custom.data ?? []);
+              onQuickStart={(t) => {
+                const grid = gridTemplate(t, custom.data ?? []);
                 const hasCounter = draft.spec.manual_fields.some((m) => m.type === "box_sequence");
+                const manual_fields = t === "kanban" && !hasCounter ? [...draft.spec.manual_fields, KANBAN_CARD_FIELD] : draft.spec.manual_fields;
                 setDraft({
                   ...draft,
-                  spec: {
-                    ...draft.spec,
-                    grid,
-                    manual_fields: hasCounter ? draft.spec.manual_fields : [...draft.spec.manual_fields, KANBAN_CARD_FIELD],
-                    style: { ...draft.spec.style, layout: "grid" },
-                  },
+                  ...(t === "tps" && draft.qr_mode === "none" ? { qr_mode: "part" as const } : {}),
+                  spec: { ...draft.spec, grid, manual_fields, style: { ...draft.spec.style, layout: "grid" } },
                 });
               }}
             />
@@ -194,7 +191,7 @@ export function ConfigEditorPage() {
             <ManualSection draft={draft} onChange={(manual_fields, fields) => setDraft({ ...draft, spec: { ...draft.spec, manual_fields, fields } })} />
           </Section>
         </div>
-        <div className="sticky top-14 flex min-w-0 flex-1 flex-col gap-4 p-6">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-6">
           <div className="flex flex-col gap-4 rounded-[12px] border border-border bg-surface p-5 shadow-card">
             <div className="flex items-center gap-3">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary-subtle text-primary">

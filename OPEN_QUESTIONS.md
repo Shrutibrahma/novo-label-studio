@@ -303,3 +303,10 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     working). Archived types vanish from Configure and Print, but their configs stay, so history and exact
     reprints are unaffected; History shows the type. Print Labels remembers the chosen type per browser.
 
+97. **Standard TPS card + simpler editor (owner's request, 2026-10-19).** Quick start "Standard TPS card":
+    header block (Process, Part #, Location), the location code as a large destination, Lot size / Min / Max,
+    QR in the bottom-right corner; custom fields matched by name (process/station, location/supermarket/rack,
+    lot/qty, min, max). Colour status (green/yellow/red) can't be printed: the ZQ630 Plus is direct thermal,
+    black only, so colour comes from coloured label stock or card sleeves. Box text size/alignment/bold moved
+    under "More options". Fixed: the Configure editor now fills the window and each column scrolls on its own
+    (it used to scroll the whole page and leave a blank strip at the bottom).

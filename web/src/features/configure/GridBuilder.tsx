@@ -26,13 +26,33 @@ function finder(custom: CustomField[]) {
   return (...words: string[]) => custom.find((f) => words.every((w) => f.label.toLowerCase().includes(w) || f.key.includes(w)))?.key ?? null;
 }
 
-export type TemplateName = "bin" | "kanban" | "simple" | "blank";
+export type TemplateName = "tps" | "bin" | "kanban" | "simple" | "blank";
 
 /** The print-time counter a kanban card prints as "CARD 1/2" (numbered automatically when printing a set). */
 export const KANBAN_CARD_FIELD: ManualField = { key: "card", label: "Card", type: "box_sequence", noun: "CARD", required: false };
 
 export function gridTemplate(name: TemplateName, custom: CustomField[]): GridLayout {
   const find = finder(custom);
+  if (name === "tps") {
+    // Standard TPS card: header block (process, part #, location), the destination code big enough to read from
+    // a distance, the standard lot size with min/max, and the QR in the bottom-right corner.
+    const loc = find("location") ?? find("supermarket") ?? find("rack") ?? find("bin");
+    return {
+      rows: [
+        { height: 3, cells: [field(find("process") ?? find("station") ?? find("cell"), "PROCESS", 2), field("part_number", "PART #", 3), field(loc, "LOCATION", 2)] },
+        { height: 5, cells: [field(loc, null, 1, { size: "xl" })] },
+        {
+          height: 4,
+          cells: [
+            field(find("lot") ?? find("qty") ?? find("quantity"), "LOT SIZE", 2),
+            field(find("min"), "MIN", 2),
+            field(find("max"), "MAX", 2),
+            { ...field(null, null, 3), kind: "qr" },
+          ],
+        },
+      ],
+    };
+  }
   if (name === "kanban") {
     const label = (text: string, width = 1): GridCell => ({ ...field(null, null, width, { size: "small" }), kind: "text", text });
     const value = (key: string | null, width = 1): GridCell => field(key, null, width, { size: "medium", bold: false });
@@ -220,7 +240,7 @@ export function GridBuilder({ draft, custom, onChange, onManualFields }: {
       onManualFields([...draft.spec.manual_fields, KANBAN_CARD_FIELD], next);
       return;
     }
-    setRows(next.rows, t === "bin" && draft.qr_mode === "none" ? { qr_mode: "part" } : undefined);
+    setRows(next.rows, (t === "bin" || t === "tps") && draft.qr_mode === "none" ? { qr_mode: "part" } : undefined);
   };
 
   return (
@@ -232,6 +252,7 @@ export function GridBuilder({ draft, custom, onChange, onManualFields }: {
         </span>
         {(
           [
+            ["tps", "Standard TPS card"],
             ["kanban", "Kanban card"],
             ["bin", "Bin card"],
             ["simple", "Simple"],
@@ -337,12 +358,14 @@ export function GridBuilder({ draft, custom, onChange, onManualFields }: {
                 {selected.kind === "text" && (
                   <Input aria-label="Text" maxLength={60} placeholder="Text printed on every label" value={selected.text ?? ""} onChange={(e) => setCell(r, sel.cell, { text: e.target.value })} />
                 )}
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="flex flex-col gap-1">
-                    <span className="t-caption text-text-muted">Heading (optional)</span>
-                    <Input aria-label="Heading" heightClass="h-8" className="t-small uppercase" maxLength={24} placeholder="none" value={selected.heading ?? ""} onChange={(e) => setCell(r, sel.cell, { heading: e.target.value || null })} />
-                  </label>
-                  {(selected.kind === "field" || selected.kind === "text") && (
+                <label className="flex flex-col gap-1">
+                  <span className="t-caption text-text-muted">Heading (optional)</span>
+                  <Input aria-label="Heading" heightClass="h-8" className="t-small uppercase" maxLength={24} placeholder="none" value={selected.heading ?? ""} onChange={(e) => setCell(r, sel.cell, { heading: e.target.value || null })} />
+                </label>
+                {(selected.kind === "field" || selected.kind === "text") && (
+                <details>
+                  <summary className="cursor-pointer t-small text-text-secondary select-none hover:text-text">More options: text size, alignment, bold</summary>
+                  <div className="mt-2 flex flex-col gap-3">
                     <label className="flex flex-col gap-1">
                       <span className="t-caption text-text-muted">Text size (largest)</span>
                       <Select
@@ -359,21 +382,20 @@ export function GridBuilder({ draft, custom, onChange, onManualFields }: {
                         onChange={(e) => setCell(r, sel.cell, { size: e.target.value as GridCell["size"] })}
                       />
                     </label>
-                  )}
-                </div>
-                {(selected.kind === "field" || selected.kind === "text") && (
-                  <div className="flex flex-wrap items-center gap-4">
-                    <SegmentedControl
-                      ariaLabel="Alignment"
-                      value={selected.align}
-                      onChange={(align) => setCell(r, sel.cell, { align })}
-                      options={[
-                        { value: "left", label: "Left" },
-                        { value: "center", label: "Center" },
-                      ]}
-                    />
-                    <Switch label={<span className="t-small text-text-secondary">Bold</span>} checked={selected.bold} onChange={(bold) => setCell(r, sel.cell, { bold })} />
+                    <div className="flex flex-wrap items-center gap-4">
+                      <SegmentedControl
+                        ariaLabel="Alignment"
+                        value={selected.align}
+                        onChange={(align) => setCell(r, sel.cell, { align })}
+                        options={[
+                          { value: "left", label: "Left" },
+                          { value: "center", label: "Center" },
+                        ]}
+                      />
+                      <Switch label={<span className="t-small text-text-secondary">Bold</span>} checked={selected.bold} onChange={(bold) => setCell(r, sel.cell, { bold })} />
+                    </div>
                   </div>
+                </details>
                 )}
                 {selected.kind === "qr" && <p className="t-caption text-text-muted">What the code holds is set under QR code &amp; serial.</p>}
                 {selected.kind === "image" && <p className="t-caption text-text-muted">The part's photo, in black-and-white dots. Parts without a photo leave this box empty.</p>}

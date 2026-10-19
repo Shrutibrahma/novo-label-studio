@@ -58,6 +58,7 @@ is written to `agent-output/{job_id}.zpl` with a PNG of each label next to it.
 | `.\scripts\backup-now.ps1` | Take a backup now (database dump + part images → `backups\`) |
 | `.\scripts\restore.ps1` | Restore the newest backup (or `-Stamp <yyyymmdd-HHMMSS>`) |
 | `.\scripts\reset-db.ps1` | Wipe the database and images and start fresh (asks for confirmation) |
+| `.\scripts\reset-password.ps1` | Set a new password for a user, e.g. a forgotten admin password (typed hidden, asked twice; also unlocks the account and signs it out everywhere) |
 
 To check a job's ZPL by eye without a printer: `cd agent; uv run zpl2png ..\agent-output\<job>.zpl`
 writes `<job>-1.png`, `<job>-2.png`, … next to it (the simulated printer already does this for every job).
@@ -147,7 +148,7 @@ api/        FastAPI app (app/), Alembic migrations, bundled OFL fonts, tests
 web/        React UI (src/), Playwright flows (e2e/)
 agent/      print agent (agent/), tests, packaging (PyInstaller + NSSM)
 deploy/     docker-compose.yml, nginx.conf, backup.sh, e2e override
-scripts/    PowerShell entry points (up, down, agent, demo, test, backup-now, restore, reset-db)
+scripts/    PowerShell entry points (up, down, agent, demo, test, backup-now, restore, reset-db, reset-password)
 spike/m0/   hardware spike script for the first printer session
 schema.sql  database schema (migration 0001 applies it verbatim)
 SPEC.md     build specification

@@ -46,10 +46,11 @@ def map_status(status: int, win32print: Any) -> str:
 
 
 class ZebraUsbPrinter:
-    def __init__(self, queue: str, hs_readback: bool = False) -> None:
+    def __init__(self, queue: str, hs_readback: bool = False, language: str = "zpl") -> None:
         self.name = queue
         self.queue = queue
         self.hs_readback = hs_readback
+        self.language = language
         self._w = _win32print()
 
     def status(self) -> str:
@@ -69,6 +70,10 @@ class ZebraUsbPrinter:
         return map_status(int(info.get("Status", 0)), w)
 
     def send(self, job_id: str, payload: bytes) -> None:
+        if self.language == "epl":
+            from agent.epl import zpl_to_epl
+
+            payload = zpl_to_epl(payload)
         w = self._w
         h = w.OpenPrinter(self.queue)
         try:

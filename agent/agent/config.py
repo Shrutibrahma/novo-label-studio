@@ -32,12 +32,17 @@ class AgentConfig:
     log_dir: Path
     sim_control_port: int
     heartbeat_seconds: float = 10.0
+    # What the printer understands: "zpl" (Zebra) or "epl" (EPL2: e.g. ARKSCAN 2054A on the "Zebra LP2844" driver).
+    printer_language: str = "zpl"
 
     @classmethod
     def from_env(cls) -> AgentConfig:
         mode = os.environ.get("AGENT_PRINTER_MODE", "simulated").strip().lower()
         if mode not in ("simulated", "usb"):
             raise SystemExit(f"AGENT_PRINTER_MODE must be 'simulated' or 'usb', not {mode!r}")
+        language = os.environ.get("AGENT_PRINTER_LANGUAGE", "zpl").strip().lower()
+        if language not in ("zpl", "epl"):
+            raise SystemExit(f"AGENT_PRINTER_LANGUAGE must be 'zpl' or 'epl', not {language!r}")
         token = os.environ.get("AGENT_TOKEN", "").strip()
         if not token:
             raise SystemExit("AGENT_TOKEN is not set. Copy the token from setup (or Settings → Printers → New agent token).")
@@ -53,4 +58,5 @@ class AgentConfig:
             hs_readback=_flag("AGENT_HS_READBACK"),
             log_dir=Path(os.environ.get("AGENT_LOG_DIR") or default_log_dir()),
             sim_control_port=int(os.environ.get("AGENT_SIM_CONTROL_PORT", "9181")),
+            printer_language=language,
         )

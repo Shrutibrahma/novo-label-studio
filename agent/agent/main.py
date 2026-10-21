@@ -121,7 +121,7 @@ def make_printer(cfg: AgentConfig, agent_ref: list[Agent]) -> Printer:
     if cfg.mode == "usb":
         from agent.zebra import ZebraUsbPrinter
 
-        return ZebraUsbPrinter(cfg.printer_queue, hs_readback=cfg.hs_readback)
+        return ZebraUsbPrinter(cfg.printer_queue, hs_readback=cfg.hs_readback, language=cfg.printer_language)
     sim = SimulatedPrinter(cfg.output_dir, on_status_change=lambda: agent_ref and agent_ref[0].request_heartbeat())
     sim.serve_control(cfg.sim_control_port)
     return sim

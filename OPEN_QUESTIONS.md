@@ -310,3 +310,12 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     black only, so colour comes from coloured label stock or card sleeves. Box text size/alignment/bold moved
     under "More options". Fixed: the Configure editor now fills the window and each column scrolls on its own
     (it used to scroll the whole page and leave a blank strip at the bottom).
+98. **ARKSCAN 2054A hardware test (2026-10-21).** The unit (USB, reports as "4BARCODE 4B-2054A") with ARKSCAN's
+    Seagull "Zebra LP2844" driver on USB003 ignored ZPL and TSPL text labels but printed EPL. Our 4×6 ruler label
+    sent as EPL `GW` graphics printed pixel-exact (owner verified). So the agent got `AGENT_PRINTER_LANGUAGE=epl`
+    (`scripts/agent.ps1 -Language epl`): the API still sends ZPL (one ^GFA bitmap per label); the agent decodes it
+    and re-wraps the same bitmap as EPL (N, D from ~SD, q, Q length+3 mm gap, GW, P copies). No schema change.
+    Not mapped: ^PR speed (EPL S values are model-specific; the printer's own speed is used). Still to test on
+    hardware: other roll sizes and narrow-label alignment, copies, darkness, error states (lid open, out of
+    labels, cable pulled) as reported by the Windows spooler.
+

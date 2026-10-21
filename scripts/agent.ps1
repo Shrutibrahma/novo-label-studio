@@ -1,10 +1,13 @@
 # Starts the Smart Labels print agent on this laptop.
 #   scripts/agent.ps1                          simulated printer (default): writes ZPL + PNGs to ./agent-output
 #   scripts/agent.ps1 -Mode usb                the real ZQ630 Plus through the Windows print queue
+#   scripts/agent.ps1 -Mode usb -Queue ARKSCAN -Language epl   an ARKSCAN 2054A (Seagull "Zebra LP2844" driver)
 #   scripts/agent.ps1 -Token <token>           the agent token from setup / Settings -> Printers (saved for next time)
 # Force the simulated printer's status from another window:  scripts/agent.ps1 -SimStatus out_of_media
 param(
     [ValidateSet('simulated', 'usb')][string]$Mode = 'simulated',
+    # What the printer understands: zpl (Zebra) or epl (e.g. ARKSCAN 2054A on the 'Zebra LP2844' driver).
+    [ValidateSet('zpl', 'epl')][string]$Language = 'zpl',
     [string]$Token,
     [string]$ApiBaseUrl,
     [string]$Queue = 'ZQ630 Plus',
@@ -43,12 +46,13 @@ $env:AGENT_TOKEN = $Token
 $env:API_BASE_URL = $ApiBaseUrl
 $env:AGENT_PRINTER_MODE = $Mode
 $env:AGENT_PRINTER_QUEUE = $Queue
+$env:AGENT_PRINTER_LANGUAGE = $Language
 $env:AGENT_OUTPUT_DIR = Join-Path $RepoRoot 'agent-output'
 if (-not $env:AGENT_POLL_SECONDS) { $env:AGENT_POLL_SECONDS = '1' }
 if (Test-Path $cert) { $env:AGENT_CA_BUNDLE = $cert }
 if ($HsReadback) { $env:AGENT_HS_READBACK = '1' }  # [SPIKE] ~HS status readback over USB
 
-Write-Host "Starting the print agent ($Mode) against $ApiBaseUrl. Press Ctrl+C to stop."
+Write-Host "Starting the print agent ($Mode, $Language) against $ApiBaseUrl. Press Ctrl+C to stop."
 if ($Mode -eq 'simulated') { Write-Host "Printed jobs go to $($env:AGENT_OUTPUT_DIR)" }
 Push-Location $agentDir
 try {

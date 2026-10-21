@@ -205,3 +205,45 @@ def test_write_pngs_cli(tmp_path: Path) -> None:
     assert cli([str(f)]) == 0
     assert (tmp_path / "x-1.png").exists()
     assert write_pngs(f.read_bytes(), tmp_path / "o", "y")[0].name == "y-1.png"
+
+
+def test_zpl_to_epl_is_the_same_bitmap() -> None:
+    """EPL output (ARKSCAN 2054A on the LP2844 driver) carries exactly the API's bitmap: GW bits 1 = white, row
+    padding white, copies and darkness carried over."""
+    from agent.epl import density_from_darkness, zpl_to_epl
+
+    img = sample(406, 203)  # 406 dots: rows padded to 408 bits
+    zpl = b"~SD20\n" + encode(img, copies=3)
+    epl = zpl_to_epl(zpl)
+    head, rest = epl.split(b"GW0,0,51,203,", 1)
+    assert head == b"\r\nN\r\nD10\r\nq408\r\nQ203,24\r\n"
+    data, tail = rest[: 51 * 203], rest[51 * 203:]
+    assert tail == b"\r\nP3\r\n"
+    back = Image.frombytes("1", (408, 203), data).crop((0, 0, 406, 203))
+    assert back.tobytes() == img.tobytes()
+    assert all(data[r * 51 + 50] & 0b11 == 0b11 for r in range(203))  # the 2 padding bits are white
+    assert density_from_darkness(0) == 0 and density_from_darkness(30) == 15
+    two = zpl_to_epl(encode(img) + encode(sample(812, 406)))
+    assert two.count(b"\r\nN\r\n") == 2 and b"D" not in two.split(b"GW")[0]  # no ~SD: printer's own density
+
+
+def test_usb_printer_sends_epl_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    import agent.zebra as zebra
+
+    sent: list[bytes] = []
+
+    class FakeWin32:
+        def OpenPrinter(self, q: str) -> str: return q  # noqa: E704
+        def StartDocPrinter(self, h: str, level: int, doc: tuple[str, None, str]) -> None: assert doc[2] == "RAW"  # noqa: E704
+        def StartPagePrinter(self, h: str) -> None: pass  # noqa: E704
+        def WritePrinter(self, h: str, data: bytes) -> int: sent.append(data); return len(data)  # noqa: E702,E704
+        def EndPagePrinter(self, h: str) -> None: pass  # noqa: E704
+        def EndDocPrinter(self, h: str) -> None: pass  # noqa: E704
+        def ClosePrinter(self, h: str) -> None: pass  # noqa: E704
+
+    monkeypatch.setattr(zebra, "_win32print", lambda: FakeWin32())
+    zpl = encode(sample())
+    zebra.ZebraUsbPrinter("ARKSCAN", language="epl").send("j", zpl)
+    zebra.ZebraUsbPrinter("ZQ630 Plus").send("j", zpl)
+    assert sent[0].startswith(b"\r\nN\r\n") and b"GW0,0," in sent[0]
+    assert sent[1] == zpl  # Zebra printers still get the API's ZPL untouched

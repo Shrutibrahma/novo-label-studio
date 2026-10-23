@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { useDebounced } from "../lib/parts";
 import { Switch } from "./Form";
@@ -52,15 +52,18 @@ export function LabelPreview({
   maxHeight,
   showActualSizeToggle = true,
   padding = 24,
-  shrink = false,
+  shrink: _shrink = false,
+  overlay,
 }: {
   result: PreviewResult | undefined;
   loading?: boolean;
   maxHeight?: number;
   showActualSizeToggle?: boolean;
   padding?: number;
-  /** Static thumbnails (Configure card, part drawer): scale below 1× when the label is wider than the pane. */
+  /** Kept for callers; every preview now shrinks to fit its pane. */
   shrink?: boolean;
+  /** Drawn over the label image at its size (e.g. clickable boxes in the Configure editor). */
+  overlay?: ReactNode;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState({ w: 0, h: 0, dpr: 1 });
@@ -100,8 +103,8 @@ export function LabelPreview({
       // The integer multiple is in device pixels, not CSS pixels: at 125% scaling a 2× CSS scale is 2.5 device
       // pixels per dot, which makes dots uneven and text look distorted.
       const fit = Math.min(avail.w / result.width_dots, avail.h / result.height_dots) * avail.dpr;
-      const scale =
-        shrink && fit < 1 ? Math.max(fit, 0.05) / avail.dpr : Math.max(1, Math.floor(fit) || 1) / avail.dpr;
+      // Too big for the pane: shrink to fit (never cut the label off). Otherwise the largest whole multiple.
+      const scale = fit < 1 ? Math.max(fit, 0.05) / avail.dpr : Math.max(1, Math.floor(fit)) / avail.dpr;
       width = result.width_dots * scale;
       height = result.height_dots * scale;
       crisp = Number.isInteger(Math.round(scale * avail.dpr * 1000) / 1000);
@@ -117,13 +120,16 @@ export function LabelPreview({
         data-testid="label-preview"
       >
         {src && result && (
-          <img
-            src={src}
-            alt="Label preview"
-            className={`${crisp ? "pixelated " : ""}m-auto block max-w-none shrink-0 bg-label-paper outline outline-1 outline-preview-edge`}
-            style={{ width, height }}
-            draggable={false}
-          />
+          <div className="relative m-auto shrink-0" style={{ width, height }}>
+            <img
+              src={src}
+              alt="Label preview"
+              className={`${crisp ? "pixelated " : ""}block max-w-none bg-label-paper outline outline-1 outline-preview-edge`}
+              style={{ width, height }}
+              draggable={false}
+            />
+            {overlay}
+          </div>
         )}
         {result?.serial_placeholder && (
           <span className="absolute top-3 right-3 inline-flex h-[22px] items-center rounded-full bg-info-bg px-2 t-caption text-info">Serial assigned at print</span>

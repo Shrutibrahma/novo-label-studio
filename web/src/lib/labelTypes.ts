@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import { api } from "./api";
-import type { SizeBrief } from "./parts";
+import type { PartDetail, SizeBrief } from "./parts";
+import { qk } from "./queries";
 
 /** A saved label type (Label, Bin, Rack, Workstation, Kanban, ...) with its current default design. */
 export interface LabelType {
@@ -60,4 +61,12 @@ export function useCurrentLabelType(): LabelType | undefined {
   );
   const list = types.data ?? [];
   return list.find((t) => t.id === stored) ?? list[0];
+}
+
+/** A part with its effective design for a label type (the first type when none is given). */
+export function usePartForType(partId: string, typeId: string | undefined) {
+  return useQuery({
+    queryKey: [...qk.part(partId), typeId ?? "first"],
+    queryFn: () => api<PartDetail>(`/parts/${partId}${typeId ? `?type_id=${typeId}` : ""}`),
+  });
 }

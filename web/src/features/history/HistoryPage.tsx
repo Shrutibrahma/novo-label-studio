@@ -132,7 +132,7 @@ export function HistoryPage() {
                 <Th>Label</Th>
                 <Th>Serial</Th>
                 <Th>Box</Th>
-                <Th>Size</Th>
+                <Th>Type & size</Th>
                 <Th>Copies</Th>
                 <Th>By</Th>
                 <Th>Status</Th>
@@ -154,7 +154,10 @@ export function HistoryPage() {
                     </Td>
                     <Td>{r.serial ? <Mono className="text-text">{r.serial}</Mono> : "—"}</Td>
                     <Td className="tabular-nums">{r.box ?? "—"}</Td>
-                    <Td>{r.size}</Td>
+                    <Td>
+                      <div className="text-text">{r.label_type}</div>
+                      <div className="t-small text-text-muted">{r.size}</div>
+                    </Td>
                     <Td className="tabular-nums">{r.copies}</Td>
                     <Td>{r.by}</Td>
                     <Td>

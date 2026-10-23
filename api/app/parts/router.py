@@ -24,7 +24,7 @@ from app.concurrency import check_if_match
 from app.config import get_settings
 from app.configs.effective import effective_config
 from app.errors import ApiError
-from app.models import AppUser, Asset, LabelConfig, LabelSize, Part, PartAlias
+from app.models import AppUser, Asset, LabelConfig, LabelSize, LabelType, Part, PartAlias
 from app.parts.custom_fields import all_fields, as_def
 from app.parts.images import MAX_IMAGE_BYTES, store_png, to_png
 from app.parts.values import (
@@ -87,6 +87,8 @@ class AliasOut(BaseModel):
 
 class ConfigBrief(BaseModel):
     id: str
+    label_type_id: str
+    label_type_name: str
     version: int
     scope: str
     size: SizeBrief
@@ -285,7 +287,9 @@ async def size_brief(db: AsyncSession, size_id: uuid.UUID) -> SizeBrief:
 
 async def config_brief(db: AsyncSession, cfg: LabelConfig) -> ConfigBrief:
     author = await db.get(AppUser, cfg.created_by)
-    return ConfigBrief(id=str(cfg.id), version=cfg.version, scope=cfg.scope, size=await size_brief(db, cfg.label_size_id),
+    label_type = await db.get(LabelType, cfg.label_type_id)
+    return ConfigBrief(id=str(cfg.id), label_type_id=str(cfg.label_type_id),
+                       label_type_name=label_type.name if label_type else "", version=cfg.version, scope=cfg.scope, size=await size_brief(db, cfg.label_size_id),
                        qr_mode=cfg.qr_mode, serial_mode=cfg.serial_mode, spec=cfg.spec, created_at=cfg.created_at,
                        created_by_name=author.display_name if author else "")
 

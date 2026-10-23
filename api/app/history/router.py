@@ -59,6 +59,7 @@ class HistoryRow(BaseModel):
     status: str
     kind: str
     reprint_of: str | None
+    label_type: str
 
 
 class HistoryPage(BaseModel):
@@ -134,12 +135,13 @@ _ROWS = """
 SELECT pl.id, pl.created_at, pl.part_id, p.part_number AS current_number, pl.snapshot, pl.serial_value,
        pl.group_index, g.total AS group_total, s.name AS size_name, s.width_in, s.height_in, pl.copies,
        u.display_name AS by, j.status, j.kind, pl.reprint_of, p.part_name AS current_name,
-       ln.alias AS current_label
+       ln.alias AS current_label, lt.name AS label_type
   FROM printed_label pl
   JOIN print_job j ON j.id = pl.job_id
   JOIN part p ON p.id = pl.part_id
   JOIN label_config c ON c.id = pl.label_config_id
   JOIN label_size s ON s.id = c.label_size_id
+  JOIN label_type lt ON lt.id = c.label_type_id
   JOIN app_user u ON u.id = j.created_by
   LEFT JOIN label_group g ON g.id = pl.group_id
   LEFT JOIN part_alias ln ON ln.part_id = p.id AND ln.is_label_name
@@ -159,7 +161,7 @@ def history_row(r: Any) -> HistoryRow:
         label_name=part.get("label_name") or r.current_label, part_name=part.get("part_name") or r.current_name,
         serial=r.serial_value, box=f"{r.group_index}/{r.group_total}" if r.group_index else None,
         size=f"{_inches(r.width_in)} × {_inches(r.height_in)} in", size_name=r.size_name, copies=r.copies, by=r.by,
-        status=r.status, kind=r.kind, reprint_of=str(r.reprint_of) if r.reprint_of else None,
+        status=r.status, kind=r.kind, reprint_of=str(r.reprint_of) if r.reprint_of else None, label_type=r.label_type,
     )
 
 

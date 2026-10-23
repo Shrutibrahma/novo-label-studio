@@ -9,7 +9,7 @@ test("configure default label and a per-part override", async ({ page }) => {
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Configure" }).click();
   await expect(page.getByRole("heading", { name: "Default label" })).toBeVisible();
   await expect(page.getByText(/Version 1 · published .* by Ada Admin/)).toBeVisible();
-  await expect(page.getByText("All parts use the default label.")).toBeVisible();
+  await expect(page.getByText("No part has its own version yet. Every part prints with the design above.")).toBeVisible();
   await page.getByRole("button", { name: "Edit default label" }).click();
   const publish = page.getByRole("button", { name: "Publish version 2" });
   await expect(publish).toBeDisabled(); // nothing changed yet

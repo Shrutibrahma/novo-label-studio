@@ -44,6 +44,8 @@ export interface Alias {
 
 export interface ConfigBrief {
   id: string;
+  label_type_id: string;
+  label_type_name: string;
   version: number;
   scope: "default" | "part";
   size: SizeBrief;

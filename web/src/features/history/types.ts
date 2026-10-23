@@ -16,6 +16,7 @@ export interface HistoryRow {
   status: JobStatus;
   kind: "print" | "reprint";
   reprint_of: string | null;
+  label_type: string;
 }
 
 export interface SerialInfo {

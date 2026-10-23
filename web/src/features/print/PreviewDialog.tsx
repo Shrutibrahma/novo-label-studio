@@ -1,17 +1,17 @@
 import { Button } from "../../components/Button";
 import { Banner, Mono } from "../../components/Display";
 import { LabelPreview, usePreview } from "../../components/LabelPreview";
-import { useCurrentLabelType } from "../../lib/labelTypes";
+import { useCurrentLabelType, usePartForType } from "../../lib/labelTypes";
 import { Dialog } from "../../components/Overlay";
 import { sizeText } from "../../lib/format";
-import { usePart, type PartListItem } from "../../lib/parts";
+import type { PartListItem } from "../../lib/parts";
 
 const QR_WORD = { none: "None", part: "Part", serial: "Serial" } as const;
 
 /** 12.5 Preview dialog: read-only, width 720. */
 export function PreviewDialog({ part, onClose, onPrint }: { part: PartListItem; onClose: () => void; onPrint: () => void }) {
-  const detail = usePart(part.id);
   const labelType = useCurrentLabelType();
+  const detail = usePartForType(part.id, labelType?.id);
   const preview = usePreview({ part_id: part.id, label_type_id: labelType?.id }, 0);
   const cfg = detail.data?.config;
   const warnings = preview.data?.warnings ?? [];
@@ -35,11 +35,13 @@ export function PreviewDialog({ part, onClose, onPrint }: { part: PartListItem; 
         <LabelPreview result={preview.data} loading={preview.isFetching} maxHeight={420} />
         {cfg && (
           <div className="flex flex-wrap items-center gap-3 t-small text-text-secondary">
+            <span className="t-body-strong text-text">{cfg.label_type_name} label</span>
+            <span>·</span>
             <span>
               {cfg.size.name} · {sizeText(cfg.size)}
             </span>
             <span>·</span>
-            <span>Config v{cfg.version}</span>
+            <span>Version {cfg.version}{cfg.scope === "part" ? " (this part's own)" : ""}</span>
             <span>·</span>
             <span>QR: {QR_WORD[cfg.qr_mode]}</span>
             {cfg.serial_mode === "required" && (

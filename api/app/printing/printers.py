@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header
 from pydantic import BaseModel, Field
@@ -44,6 +44,11 @@ class PrinterOut(BaseModel):
 
 
 class PrinterPatch(BaseModel):
+    # What the printer is: set to match the hardware (e.g. ARKSCAN 2054A, 203 dpi, 4.25" print width).
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    model: str | None = Field(default=None, min_length=1, max_length=80)
+    dpi: Literal[203, 300, 600] | None = None
+    print_width_in: Decimal | None = Field(default=None, ge=Decimal("0.5"), le=Decimal("8.5"))
     loaded_label_size_id: uuid.UUID | None = None
     clear_loaded_label_size: bool = False
     darkness: int | None = Field(default=None, ge=0, le=30)
@@ -108,6 +113,17 @@ async def patch_printer(printer_id: uuid.UUID, body: PrinterPatch, user: Admin, 
         raise ApiError("NOT_FOUND")
     check_if_match(if_match, p.updated_at)
     before = snapshot(p)
+    if body.name is not None and body.name.strip() != p.name:
+        taken = (await db.execute(select(Printer.id).where(Printer.name == body.name.strip(), Printer.id != p.id))).first()
+        if taken:
+            raise ApiError("PRINTER_NAME_TAKEN", fields={"name": "Another printer already has this name."})
+        p.name = body.name.strip()
+    if body.model is not None:
+        p.model = body.model.strip()
+    if body.dpi is not None:
+        p.dpi = body.dpi
+    if body.print_width_in is not None:
+        p.print_width_in = body.print_width_in
     if body.clear_loaded_label_size:
         p.loaded_label_size_id = None
     elif body.loaded_label_size_id is not None:

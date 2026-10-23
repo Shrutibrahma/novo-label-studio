@@ -33,6 +33,10 @@ function PrinterCard({ printer }: { printer: Printer }) {
   const toast = useToast();
   const sizes = useSizes();
   const init = {
+    name: printer.name,
+    model: printer.model,
+    dpi: String(printer.dpi),
+    width: String(printer.print_width_in),
     loaded: printer.loaded_label_size?.id ?? "",
     darkness: numOrEmpty(printer.darkness),
     speed: numOrEmpty(printer.speed_ips),
@@ -50,6 +54,10 @@ function PrinterCard({ printer }: { printer: Printer }) {
   const save = useMutation({
     mutationFn: () => {
       const body: Record<string, unknown> = {};
+      if (form.name !== init.name) body.name = form.name;
+      if (form.model !== init.model) body.model = form.model;
+      if (form.dpi !== init.dpi) body.dpi = Number(form.dpi);
+      if (form.width !== init.width) body.print_width_in = form.width;
       if (form.loaded !== init.loaded) Object.assign(body, form.loaded ? { loaded_label_size_id: form.loaded } : { clear_loaded_label_size: true });
       if (form.darkness !== init.darkness) Object.assign(body, form.darkness === "" ? { clear_darkness: true } : { darkness: Number(form.darkness) });
       if (form.speed !== init.speed) Object.assign(body, form.speed === "" ? { clear_speed: true } : { speed_ips: Number(form.speed) });
@@ -95,6 +103,18 @@ function PrinterCard({ printer }: { printer: Printer }) {
         </div>
       </div>
       <div className="mt-5 grid grid-cols-2 gap-4">
+        <Field label="Name" htmlFor={`pr-name-${printer.id}`} error={errors.name}>
+          <Input id={`pr-name-${printer.id}`} maxLength={60} value={form.name} error={errors.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </Field>
+        <Field label="Model" htmlFor={`pr-model-${printer.id}`} helper="e.g. ARKSCAN 2054A or Zebra ZQ630 Plus">
+          <Input id={`pr-model-${printer.id}`} maxLength={80} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+        </Field>
+        <Field label="Resolution" htmlFor={`pr-dpi-${printer.id}`} helper="Labels are drawn at this dpi. ARKSCAN 2054A: 203.">
+          <Select id={`pr-dpi-${printer.id}`} value={form.dpi} options={[{ value: "203", label: "203 dpi" }, { value: "300", label: "300 dpi" }, { value: "600", label: "600 dpi" }]} onChange={(e) => setForm({ ...form, dpi: e.target.value })} />
+        </Field>
+        <Field label="Print width (in)" htmlFor={`pr-width-${printer.id}`} error={errors.print_width_in} helper="Widest the head prints. ARKSCAN 2054A: 4.25.">
+          <Input id={`pr-width-${printer.id}`} type="number" step="0.01" min={0.5} max={8.5} value={form.width} error={errors.print_width_in} onChange={(e) => setForm({ ...form, width: e.target.value })} />
+        </Field>
         <Field label="Loaded labels" htmlFor={`pr-size-${printer.id}`} className="col-span-2">
           <Select id={`pr-size-${printer.id}`} value={form.loaded} options={sizeOptions} onChange={(e) => setForm({ ...form, loaded: e.target.value })} />
         </Field>

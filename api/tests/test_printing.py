@@ -441,3 +441,16 @@ async def test_grid_layout_publishes_previews_and_prints(admin: httpx.AsyncClien
         pl = (await db.execute(select(PrintedLabel).where(PrintedLabel.part_id == uuid.UUID(part["id"])))).scalar_one()
         assert pl.snapshot["part"] == {"part_number": "NP-2", "bin_qty": "300", "part_name": "Plain washer"}
         assert pl.qr_payload == "PN:NP-2"
+
+
+async def test_printer_identity_is_editable(admin: httpx.AsyncClient, ready: dict[str, Any]) -> None:
+    """Settings → Printers: name, model, dpi and print width match the real printer (e.g. an ARKSCAN 2054A)."""
+    pid = ready["printer_id"]
+    r = await admin.patch(f"{V}/printers/{pid}", json={"name": "ARKSCAN", "model": "ARKSCAN 2054A", "dpi": 203,
+                                                         "print_width_in": "4.25"})
+    assert r.status_code == 200, r.text
+    assert (r.json()["name"], r.json()["model"], r.json()["dpi"], r.json()["print_width_in"]) == \
+        ("ARKSCAN", "ARKSCAN 2054A", 203, 4.25)
+    assert (await admin.patch(f"{V}/printers/{pid}", json={"dpi": 250})).status_code == 422
+    preview = (await admin.post(f"{V}/render/preview", json={"part_id": ready["plain"]["id"]})).json()
+    assert preview["dpi"] == 203

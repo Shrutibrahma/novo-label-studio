@@ -99,12 +99,8 @@ export function ConfigureListPage() {
           <LabelPreview result={preview.data} loading={preview.isFetching} padding={12} shrink showActualSizeToggle={false} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <h2 className="inline-flex items-center gap-2 t-h2 text-text">
-            Default label
-            {(types.data?.length ?? 0) > 1 && selected && (
-              <span className="inline-flex h-6 items-center rounded-full bg-primary-subtle px-2.5 t-caption text-primary">{selected.name}</span>
-            )}
-          </h2>
+          <h2 className="t-h2 text-text">{(types.data?.length ?? 0) > 1 && selected ? `${selected.name} label` : "Default label"}</h2>
+          <p className="t-small text-text-muted">Used for every part unless a part has its own version (below).</p>
           {def && (
             <>
               <p className="t-body text-text">
@@ -126,9 +122,9 @@ export function ConfigureListPage() {
         </div>
       </Card>
 
-      <h2 className="mt-8 mb-4 t-h2 text-text">Custom labels for specific parts</h2>
+      <h2 className="mt-8 mb-4 t-h2 text-text">Parts with their own version</h2>
       {configs.data && configs.data.overrides.length === 0 ? (
-        <p className="t-body text-text-secondary">All parts use the default{(types.data?.length ?? 0) > 1 && selected ? ` ${selected.name}` : ""} label.</p>
+        <p className="t-body text-text-secondary">No part has its own version yet. Every part prints with the design above.</p>
       ) : (
         <Table>
           <thead>

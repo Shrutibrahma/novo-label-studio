@@ -158,7 +158,7 @@ function WidthBar({ row, rowIndex, selected, onSelect, onWidths, label }: {
     window.addEventListener("pointerup", up);
   };
   return (
-    <div ref={bar} className="flex h-11 w-full select-none overflow-hidden rounded-[6px] border border-border-strong bg-surface" role="group" aria-label={`Row ${rowIndex + 1} boxes`}>
+    <div ref={bar} className="flex min-h-[52px] w-full select-none overflow-hidden rounded-[6px] border border-border-strong bg-surface" role="group" aria-label={`Row ${rowIndex + 1} boxes`}>
       {row.cells.map((c, i) => {
         const Icon = KIND_ICON[c.kind];
         return (
@@ -168,12 +168,13 @@ function WidthBar({ row, rowIndex, selected, onSelect, onWidths, label }: {
               onClick={() => onSelect(i)}
               aria-pressed={selected === i}
               aria-label={`Edit box ${i + 1} in row ${rowIndex + 1}: ${label(c)}`}
-              className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-center transition-colors duration-150 ${selected === i ? "bg-primary text-white" : "hover:bg-row-hover text-text"}`}
+              title={c.heading ? `${c.heading}: ${label(c)}` : label(c)}
+              className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1.5 py-1 text-center transition-colors duration-150 ${selected === i ? "bg-primary text-white" : "hover:bg-row-hover text-text"}`}
             >
               {c.heading && <span className={`w-full truncate text-[10px] leading-3 font-semibold uppercase ${selected === i ? "text-white/80" : "text-text-muted"}`}>{c.heading}</span>}
-              <span className="inline-flex w-full items-center justify-center gap-1 truncate t-caption">
-                <Icon size={12} strokeWidth={1.75} className="shrink-0" aria-hidden />
-                <span className="truncate">{label(c)}</span>
+              <span className="flex w-full items-start justify-center gap-1 text-[11px] leading-[13px] font-medium">
+                <Icon size={11} strokeWidth={1.75} className="mt-px shrink-0" aria-hidden />
+                <span className="line-clamp-2 break-words">{label(c)}</span>
               </span>
             </button>
             {i < row.cells.length - 1 && (
@@ -194,17 +195,72 @@ function WidthBar({ row, rowIndex, selected, onSelect, onWidths, label }: {
 }
 
 /** Section "Boxes" (grid layout): templates, rows of boxes, and the editor of the selected box. */
-export function GridBuilder({ draft, custom, onChange, onManualFields }: {
+export type GridSel = { row: number; cell: number } | null;
+
+/** Where each box sits on the label, as fractions of the label (same arithmetic as the renderer's grid). */
+export function gridBoxes(grid: GridLayout, widthDots: number, heightDots: number, marginDots = 13) {
+  const shares = (weights: number[], total: number) => {
+    const sum = weights.reduce((a, b) => a + b, 0) || 1;
+    const out = weights.slice(0, -1).map((w) => Math.floor((total * w) / sum));
+    return [...out, total - out.reduce((a, b) => a + b, 0)];
+  };
+  const w = widthDots - 2 * marginDots;
+  const h = heightDots - 2 * marginDots;
+  const boxes: { row: number; cell: number; x: number; y: number; w: number; h: number }[] = [];
+  let y = marginDots;
+  shares(grid.rows.map((r) => r.height), h).forEach((rh, r) => {
+    let x = marginDots;
+    shares(grid.rows[r]!.cells.map((c) => c.width), w).forEach((cw, c) => {
+      boxes.push({ row: r, cell: c, x: x / widthDots, y: y / heightDots, w: cw / widthDots, h: rh / heightDots });
+      x += cw;
+    });
+    y += rh;
+  });
+  return boxes;
+}
+
+/** Click a box on the label preview to edit it. */
+export function GridOverlay({ grid, widthDots, heightDots, sel, onSel }: { grid: GridLayout; widthDots: number; heightDots: number; sel: GridSel; onSel: (s: GridSel) => void }) {
+  return (
+    <>
+      {gridBoxes(grid, widthDots, heightDots).map((b) => {
+        const on = sel?.row === b.row && sel.cell === b.cell;
+        return (
+          <button
+            key={`${b.row}-${b.cell}`}
+            type="button"
+            aria-label={`Edit box ${b.cell + 1} in row ${b.row + 1} on the label`}
+            title="Click to edit this box"
+            onClick={() => onSel({ row: b.row, cell: b.cell })}
+            className={`absolute rounded-[2px] transition-colors duration-150 ${on ? "bg-primary/15 outline outline-2 outline-primary" : "hover:bg-primary/10 hover:outline hover:outline-2 hover:outline-primary/60"}`}
+            style={{ left: `${b.x * 100}%`, top: `${b.y * 100}%`, width: `${b.w * 100}%`, height: `${b.h * 100}%` }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+export function GridBuilder({ draft, custom, onChange, onManualFields, sel: selProp, onSel }: {
   draft: Draft;
   custom: CustomField[];
   onChange: (grid: GridLayout, patch?: Partial<Draft>) => void;
   onManualFields: (manual: ManualField[], grid: GridLayout) => void;
+  /** The selected box, when the page shares it with the preview (click a box on the label). */
+  sel?: GridSel;
+  onSel?: (s: GridSel) => void;
 }) {
   const grid: GridLayout = draft.spec.grid ?? gridTemplate("bin", custom);
-  const [sel, setSel] = useState<{ row: number; cell: number } | null>(grid.rows.length ? { row: 0, cell: 0 } : null);
+  const [selLocal, setSelLocal] = useState<GridSel>(grid.rows.length ? { row: 0, cell: 0 } : null);
+  const sel = selProp !== undefined ? selProp : selLocal;
+  const setSel = onSel ?? setSelLocal;
   useEffect(() => {
     if (sel && (sel.row >= grid.rows.length || sel.cell >= (grid.rows[sel.row]?.cells.length ?? 0))) setSel(grid.rows.length ? { row: 0, cell: 0 } : null);
-  }, [grid, sel]);
+  }, [grid, sel, setSel]);
+  // A box picked on the label preview: bring its row and settings into view.
+  useEffect(() => {
+    if (sel) document.getElementById(`grid-row-${sel.row}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [sel]);
   const customLabels = Object.fromEntries(custom.map((f) => [f.key, f.label]));
   const label = (c: GridCell) => cellLabel(c, customLabels, draft);
 
@@ -275,7 +331,7 @@ export function GridBuilder({ draft, custom, onChange, onManualFields }: {
 
       <ol className="flex flex-col gap-3" aria-label="Rows">
         {grid.rows.map((row, r) => (
-          <li key={r} className={`flex flex-col gap-2 rounded-[8px] border p-2.5 ${sel?.row === r ? "border-primary" : "border-border"}`}>
+          <li key={r} id={`grid-row-${r}`} className={`flex flex-col gap-2 rounded-[8px] border p-2.5 ${sel?.row === r ? "border-primary" : "border-border"}`}>
             <div className="flex items-center gap-2">
               <span className="t-body-strong text-text">Row {r + 1}</span>
               <span className="ml-1 t-caption text-text-muted">Height</span>

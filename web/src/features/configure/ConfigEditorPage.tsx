@@ -8,11 +8,12 @@ import { Banner } from "../../components/Display";
 import { LabelPreview, usePreview } from "../../components/LabelPreview";
 import { ConfirmDialog } from "../../components/Overlay";
 import { api, ApiError } from "../../lib/api";
+import { formatDate } from "../../lib/format";
 import { labelTypesKey, useLabelTypes } from "../../lib/labelTypes";
 import { qk, useSettings, useSizes } from "../../lib/queries";
 import { useCustomFields, usePart, type LabelStyle } from "../../lib/parts";
 import { FieldsSection, LayoutSection, ManualSection, PictureSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
-import { GridBuilder, gridTemplate, KANBAN_CARD_FIELD } from "./GridBuilder";
+import { GridBuilder, GridOverlay, gridTemplate, KANBAN_CARD_FIELD, type GridSel } from "./GridBuilder";
 import { PartPicker, type PickedPart } from "./PartPicker";
 import { useFirstActivePart } from "./ConfigureListPage";
 import { toDraft, type ConfigOut, type Draft } from "./types";
@@ -48,6 +49,7 @@ export function ConfigEditorPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [initial, setInitial] = useState<string>("");
   const [previewPart, setPreviewPart] = useState<PickedPart | null>(null);
+  const [gridSel, setGridSel] = useState<GridSel>({ row: 0, cell: 0 });
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
@@ -113,19 +115,19 @@ export function ConfigEditorPage() {
       setPublishing(false);
     }
   };
-  const title = partId ? `Custom label for ${part.data?.part_number ?? ""}` : "Default label";
+  const typeName = labelType?.name ?? base.data.label_type_name;
+  const manyTypes = (types.data?.length ?? 0) > 1;
+  const pn = part.data?.part_number ?? "";
+  const title = partId ? (manyTypes ? `${typeName} label for ${pn}` : `Custom label for ${pn}`) : manyTypes ? `${typeName} label` : "Default label";
+  const live = `Live: version ${base.data.version}, published ${formatDate(base.data.created_at)} by ${base.data.created_by_name}.`;
   return (
     <div className="flex max-w-[1440px] flex-col overflow-hidden" style={{ height: "calc(100vh - 56px)" }}>
       <div className="flex items-center gap-3 border-b border-border bg-surface px-8 py-4">
         <div className="flex min-w-0 flex-1 flex-col">
-          <h2 className="inline-flex items-center gap-2 t-h2 text-text">
-            {title}
-            {(types.data?.length ?? 0) > 1 && (labelType || base.data.label_type_name) && (
-              <span className="inline-flex h-6 items-center rounded-full bg-primary-subtle px-2.5 t-caption text-primary">{labelType?.name ?? base.data.label_type_name}</span>
-            )}
-          </h2>
+          <h2 className="t-h2 text-text">{title}</h2>
           <p className="t-small text-text-muted">
-            {dirty ? "Unsaved changes. Publish to use them for printing; older labels keep their version." : `Version ${nextVersion - 1} is live. Change anything below and watch the preview.`}
+            {partId ? "Only this part prints with this version." : "Used for every part unless a part has its own version."}{" "}
+            {dirty ? <span className="font-semibold text-warning">You have changes that aren't published yet.</span> : live}
           </p>
         </div>
         <Button variant="ghost" onClick={() => navigate("/configure")}>
@@ -164,6 +166,8 @@ export function ConfigEditorPage() {
           {isGrid ? (
             <Section title="Rows & boxes" step={3} icon={LayoutList} hint="Add rows, split them into boxes, pick what each box shows">
               <GridBuilder
+                sel={gridSel}
+                onSel={setGridSel}
                 draft={draft}
                 custom={custom.data ?? []}
                 onChange={(grid, patch) => setDraft({ ...draft, ...patch, spec: { ...draft.spec, grid } })}
@@ -210,7 +214,17 @@ export function ConfigEditorPage() {
             </div>
             <PartPicker value={previewPart} onChange={setPreviewPart} />
           </div>
-          <LabelPreview result={preview.data} loading={preview.isFetching} maxHeight={480} />
+          <LabelPreview
+            result={preview.data}
+            loading={preview.isFetching}
+            maxHeight={480}
+            overlay={
+              isGrid && preview.data && draft.spec.grid ? (
+                <GridOverlay grid={draft.spec.grid} widthDots={preview.data.width_dots} heightDots={preview.data.height_dots} sel={gridSel} onSel={setGridSel} />
+              ) : undefined
+            }
+          />
+          {isGrid && <p className="-mt-2 t-small text-text-muted">Tip: click a box on the label to edit it.</p>}
           {preview.error ? (
             <Banner tone="danger">{preview.error instanceof ApiError ? preview.error.message : String(preview.error)}</Banner>
           ) : fits ? (

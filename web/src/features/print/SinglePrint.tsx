@@ -36,6 +36,8 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
   const custom = useCustomFields();
   const cfg = part.config;
   const spec = cfg.spec;
+  // Rows & boxes (and the earlier bin grid) are laid out in Configure: no per-print field or size choices.
+  const designed = spec.style.layout === "grid" || spec.style.layout === "bin";
   const box = spec.manual_fields.find((m) => m.type === "box_sequence");
   const serialOn = cfg.serial_mode === "required";
 
@@ -143,6 +145,15 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
           />
         ) : (
           <>
+            {designed ? (
+              <div className="flex flex-col gap-1 rounded-[8px] bg-surface-subtle p-3">
+                <span className="t-body-strong text-text">
+                  {cfg.label_type_name} label · {size.name} ({inches(size.width_in)} × {inches(size.height_in)} in)
+                </span>
+                <span className="t-small text-text-secondary">This label is laid out in Configure, so what's on it and its size are fixed here. Fill in any print-time values below.</span>
+              </div>
+            ) : (
+              <>
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-2 t-body-strong text-text">Show on label</legend>
               {keys.map((k) => {
@@ -188,6 +199,8 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
               <SegmentedControl ariaLabel="Text size" value={emphasis} onChange={setEmphasis}
                 options={[{ value: "small", label: "Small" }, { value: "medium", label: "Medium" }, { value: "large", label: "Large" }]} />
             </div>
+              </>
+            )}
 
             <ManualInputs fields={spec.manual_fields} values={manual} onChange={(k, v) => setManual({ ...manual, [k]: v })} />
 

@@ -110,6 +110,18 @@ async def test_loaded_size_must_match_until_confirmed(admin: httpx.AsyncClient, 
     assert printer["loaded_label_size"]["name"] == "Large"
 
 
+async def test_smaller_label_prints_centered_on_a_bigger_roll(admin: httpx.AsyncClient, ready: dict[str, Any]) -> None:
+    # Tall (4 × 6) is loaded and the label is Large (4 × 2): no "load these labels" step, the bitmap is the roll's.
+    await admin.patch(f"{V}/printers/{ready['printer_id']}", json={"loaded_label_size_id": ready["sizes"]["Tall"]})
+    r = await admin.post(f"{V}/print", json={"items": [{"part_id": ready["plain"]["id"]}]}, headers=key())
+    assert r.status_code == 200, r.text
+    async with sessionmaker()() as db:
+        job = await db.get(PrintJob, uuid.UUID(r.json()["jobs"][0]["id"]))
+        assert "^PW812\n^LL1218\n" in job.payload_zpl.decode()  # type: ignore[union-attr]
+    printer = (await admin.get(f"{V}/printers/{ready['printer_id']}")).json()
+    assert printer["loaded_label_size"]["name"] == "Tall" and printer["label_border"] == "smaller"
+
+
 async def test_quantity_vs_copies(admin: httpx.AsyncClient, ready: dict[str, Any]) -> None:
     r = await admin.post(f"{V}/print", json={"items": [{"part_id": ready["part"]["id"], "quantity": 3, "copies": 4}]},
                          headers=key())

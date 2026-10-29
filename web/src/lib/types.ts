@@ -50,6 +50,8 @@ export interface Printer {
   offset_y_dots: number;
   darkness: number | null;
   speed_ips: number | null;
+  /** Border around each label: only when it's centered on a bigger roll, always, or never. */
+  label_border: "never" | "smaller" | "always";
   is_default: boolean;
   updated_at: string;
 }

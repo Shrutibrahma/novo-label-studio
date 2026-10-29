@@ -257,6 +257,7 @@ class Printer(Base):
     offset_y_dots: Mapped[int] = mapped_column(SmallInteger, server_default=DB_DEFAULT)
     darkness: Mapped[int | None] = mapped_column(SmallInteger)
     speed_ips: Mapped[Decimal | None] = mapped_column(Numeric(3, 1))
+    label_border: Mapped[str] = mapped_column(Text, server_default=DB_DEFAULT)
     is_default: Mapped[bool] = mapped_column(Boolean, server_default=DB_DEFAULT)
     last_status: Mapped[str] = mapped_column(Text, server_default=DB_DEFAULT)
     last_status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

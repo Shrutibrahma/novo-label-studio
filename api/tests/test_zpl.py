@@ -77,3 +77,28 @@ def test_job_payload_concatenates_in_order() -> None:
     payload = job_payload([(a, 1), (b, 2)], PrinterSettings())
     assert payload == label_zpl(load_bitmap(a), 1, PrinterSettings()) + label_zpl(load_bitmap(b), 2, PrinterSettings())
     assert payload.count(b"^XA") == 2
+
+
+def test_smaller_label_is_centered_on_the_roll_with_a_border() -> None:
+    from app.render.zpl import BORDER_GAP_DOTS, frame_on_roll
+
+    label = Image.new("1", (100, 40), 0)  # all black, so its position is easy to find
+    out = frame_on_roll(label, PrinterSettings(roll_width_dots=200, roll_height_dots=100))
+    assert out.size == (200, 100)
+    left, top = 50, 30
+    assert out.getpixel((left, top)) == 0 and out.getpixel((left + 99, top + 39)) == 0
+    assert out.getpixel((left - 1, top + 20)) == 1  # gap between the label and its border
+    assert out.getpixel((left - BORDER_GAP_DOTS - 2, top + 20)) == 0  # the border
+    assert out.getpixel((0, 0)) == 1 and out.getpixel((199, 99)) == 1
+
+
+def test_border_modes() -> None:
+    from app.render.zpl import frame_on_roll
+
+    label = Image.new("1", (100, 40), 1)
+    same = PrinterSettings(roll_width_dots=100, roll_height_dots=40)
+    assert frame_on_roll(label, same) is label
+    boxed = frame_on_roll(label, PrinterSettings(roll_width_dots=100, roll_height_dots=40, border="always"))
+    assert boxed.getpixel((4, 20)) == 0 and boxed.getpixel((50, 20)) == 1
+    plain = frame_on_roll(label, PrinterSettings(roll_width_dots=200, roll_height_dots=100, border="never"))
+    assert plain.size == (200, 100) and plain.getextrema() == (1, 1)  # centered white label, no border drawn

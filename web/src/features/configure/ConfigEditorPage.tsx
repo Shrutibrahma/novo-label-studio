@@ -122,7 +122,7 @@ export function ConfigEditorPage() {
   const live = `Live: version ${base.data.version}, published ${formatDate(base.data.created_at)} by ${base.data.created_by_name}.`;
   return (
     <div className="flex max-w-[1440px] flex-col overflow-hidden" style={{ height: "calc(100vh - 56px)" }}>
-      <div className="flex items-center gap-3 border-b border-border bg-surface px-8 py-4">
+      <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-4 xl:px-8">
         <div className="flex min-w-0 flex-1 flex-col">
           <h2 className="t-h2 text-text">{title}</h2>
           <p className="t-small text-text-muted">
@@ -143,7 +143,7 @@ export function ConfigEditorPage() {
         </div>
       )}
       <div className="flex min-h-0 flex-1">
-        <div className="flex w-[460px] shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain border-r border-border p-4">
+        <div className="flex w-[380px] shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain border-r border-border p-4 xl:w-[460px]">
           <Section title="Size" step={1} icon={Ruler} hint="The label roll loaded in the printer">
             <SizeSection sizes={(sizes.data ?? []).filter((s) => s.active)} value={draft.label_size_id} onChange={(id) => setDraft({ ...draft, label_size_id: id })} />
           </Section>
@@ -195,18 +195,18 @@ export function ConfigEditorPage() {
             <ManualSection draft={draft} onChange={(manual_fields, fields) => setDraft({ ...draft, spec: { ...draft.spec, manual_fields, fields } })} />
           </Section>
         </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-6">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4 xl:p-6">
           <div className="flex flex-col gap-4 rounded-[12px] border border-border bg-surface p-5 shadow-card">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary-subtle text-primary">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-primary-subtle text-primary">
                 <Eye size={16} strokeWidth={1.75} aria-hidden />
               </span>
-              <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex min-w-[160px] flex-1 flex-col">
                 <span className="t-h3 text-text">Live preview</span>
                 <span className="t-small text-text-muted">Exactly the dots the printer will print</span>
               </div>
               {preview.data && (
-                <span className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 t-caption ${fits ? "bg-success-bg text-success" : "bg-warning-bg text-warning"}`}>
+                <span className={`inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 t-caption ${fits ? "bg-success-bg text-success" : "bg-warning-bg text-warning"}`}>
                   {fits ? <CircleCheck size={14} strokeWidth={1.75} aria-hidden /> : <TriangleAlert size={14} strokeWidth={1.75} aria-hidden />}
                   {fits ? "Ready to publish" : "Needs a fix"}
                 </span>

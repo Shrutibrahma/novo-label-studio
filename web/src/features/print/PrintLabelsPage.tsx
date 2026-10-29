@@ -47,6 +47,8 @@ export function PrintLabelsPage() {
   const params = useMemo<PartsParams>(() => ({ q: debouncedQ || undefined, status: "active", ...chipParams(chip) }), [debouncedQ, chip]);
   const query = usePartsQuery(params);
   const rows = query.data?.pages.flatMap((p) => p.items) ?? [];
+  // No part has a picture yet: an Image column of empty placeholders only adds noise.
+  const showImages = rows.some((p) => p.image_version !== null);
   const sentinel = useSentinel(() => query.hasNextPage && !query.isFetchingNextPage && void query.fetchNextPage(), !!query.hasNextPage);
   const isEmptyCatalogue = !query.isPending && rows.length === 0 && !debouncedQ && chip === "all";
 
@@ -131,7 +133,7 @@ export function PrintLabelsPage() {
                 <Th className="w-10 px-3">
                   <input type="checkbox" aria-label="Select all" checked={allVisibleSelected} onChange={toggleAll} />
                 </Th>
-                <Th className="w-16">Image</Th>
+                {showImages && <Th className="w-16">Image</Th>}
                 <Th>Label name</Th>
                 <Th>Part number</Th>
                 <Th>Size</Th>
@@ -143,28 +145,30 @@ export function PrintLabelsPage() {
             </thead>
             <tbody>
               {query.isPending ? (
-                <SkeletonRows columns={7} tall />
+                <SkeletonRows columns={showImages ? 7 : 6} tall />
               ) : (
                 rows.map((p) => (
                   <Tr key={p.id} tall selected={selected.has(p.id)}>
                     <Td className="px-3">
                       <input type="checkbox" aria-label={`Select ${p.part_number}`} checked={selected.has(p.id)} onChange={() => toggle(p)} />
                     </Td>
-                    <Td className="py-2">
-                      <PartThumb part={p} />
-                    </Td>
+                    {showImages && (
+                      <Td className="py-2">
+                        <PartThumb part={p} />
+                      </Td>
+                    )}
                     <Td>
                       <div className="t-body-strong text-text">{p.label_name ?? p.part_name}</div>
                       {p.label_name && <div className="t-small text-text-secondary">{p.part_name}</div>}
                     </Td>
-                    <Td>
+                    <Td className="whitespace-nowrap">
                       <Mono className="text-text">{p.part_number}</Mono>
                     </Td>
-                    <Td>{sizeText(p.size)}</Td>
+                    <Td className="whitespace-nowrap">{sizeText(p.size)}</Td>
                     <Td>
                       <FreshnessBadge state={p.label_state} />
                     </Td>
-                    <Td className="text-right">
+                    <Td className="whitespace-nowrap text-right">
                       <PrintRowActions part={p} onLaunch={setLaunch} />
                     </Td>
                   </Tr>
@@ -178,7 +182,7 @@ export function PrintLabelsPage() {
       </div>
 
       {selected.size > 0 && (
-        <div className="fixed right-0 bottom-0 left-60 z-10 border-t border-border bg-surface px-8 py-3 shadow-dropdown">
+        <div className="fixed right-0 bottom-0 left-[72px] z-10 border-t border-border bg-surface px-4 py-3 shadow-dropdown md:px-8 xl:left-60">
           <div className="flex max-w-[1440px] items-center gap-4">
             <span className="t-body-strong text-text">{selected.size} selected</span>
             <Button onClick={() => setLaunch({ mode: "print", parts: [...selected.values()] })}>Print selected</Button>

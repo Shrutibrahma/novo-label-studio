@@ -54,6 +54,7 @@ export function LabelPreview({
   padding = 24,
   shrink: _shrink = false,
   overlay,
+  roll,
 }: {
   result: PreviewResult | undefined;
   loading?: boolean;
@@ -64,6 +65,8 @@ export function LabelPreview({
   shrink?: boolean;
   /** Drawn over the label image at its size (e.g. clickable boxes in the Configure editor). */
   overlay?: ReactNode;
+  /** The roll loaded in the printer, when it's bigger than the label: the label is shown centered on it, as printed. */
+  roll?: { width_in: number; height_in: number; border: boolean } | null;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState({ w: 0, h: 0, dpr: 1 });
@@ -94,22 +97,49 @@ export function LabelPreview({
   let width = 0;
   let height = 0;
   let crisp = true;
+  let scale = 1; // CSS px per printer dot
+  // Same geometry as the API's frame_on_roll: the label centered on the roll, a 2-dot border 6 dots outside it.
+  const rollW = result && roll ? Math.max(result.width_dots, Math.floor(roll.width_in * result.dpi)) : 0;
+  const rollH = result && roll ? Math.max(result.height_dots, Math.floor(roll.height_in * result.dpi)) : 0;
+  const onRoll = !!result && !!roll && (rollW > result.width_dots || rollH > result.height_dots);
+  const frameW = onRoll ? rollW : (result?.width_dots ?? 0);
+  const frameH = onRoll ? rollH : (result?.height_dots ?? 0);
   if (result) {
     if (actual) {
-      width = (result.width_dots / result.dpi) * 96;
-      height = (result.height_dots / result.dpi) * 96;
+      scale = 96 / result.dpi;
       crisp = false;
     } else {
       // The integer multiple is in device pixels, not CSS pixels: at 125% scaling a 2× CSS scale is 2.5 device
       // pixels per dot, which makes dots uneven and text look distorted.
-      const fit = Math.min(avail.w / result.width_dots, avail.h / result.height_dots) * avail.dpr;
+      const fit = Math.min(avail.w / frameW, avail.h / frameH) * avail.dpr;
       // Too big for the pane: shrink to fit (never cut the label off). Otherwise the largest whole multiple.
-      const scale = fit < 1 ? Math.max(fit, 0.05) / avail.dpr : Math.max(1, Math.floor(fit)) / avail.dpr;
-      width = result.width_dots * scale;
-      height = result.height_dots * scale;
+      scale = fit < 1 ? Math.max(fit, 0.05) / avail.dpr : Math.max(1, Math.floor(fit)) / avail.dpr;
       crisp = Number.isInteger(Math.round(scale * avail.dpr * 1000) / 1000);
     }
+    width = result.width_dots * scale;
+    height = result.height_dots * scale;
   }
+  const gapX = onRoll && result ? Math.min(8, Math.floor((rollW - result.width_dots) / 2)) * scale : 0;
+  const gapY = onRoll && result ? Math.min(8, Math.floor((rollH - result.height_dots) / 2)) * scale : 0;
+  const image = src && result && (
+    <div className="relative m-auto shrink-0" style={{ width, height }}>
+      <img
+        src={src}
+        alt="Label preview"
+        className={`${crisp ? "pixelated " : ""}block max-w-none bg-label-paper ${onRoll ? "" : "outline outline-1 outline-preview-edge"}`}
+        style={{ width, height }}
+        draggable={false}
+      />
+      {onRoll && roll?.border && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute border-label-ink"
+          style={{ left: -gapX, top: -gapY, right: -gapX, bottom: -gapY, borderWidth: Math.max(1, 2 * scale), borderStyle: "solid" }}
+        />
+      )}
+      {overlay}
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-2">
@@ -119,17 +149,16 @@ export function LabelPreview({
         style={{ padding, height: maxHeight, minHeight: 160 }}
         data-testid="label-preview"
       >
-        {src && result && (
-          <div className="relative m-auto shrink-0" style={{ width, height }}>
-            <img
-              src={src}
-              alt="Label preview"
-              className={`${crisp ? "pixelated " : ""}block max-w-none bg-label-paper outline outline-1 outline-preview-edge`}
-              style={{ width, height }}
-              draggable={false}
-            />
-            {overlay}
+        {image && onRoll ? (
+          <div
+            className="m-auto flex shrink-0 rounded-[3px] bg-label-paper outline outline-1 outline-preview-edge"
+            style={{ width: frameW * scale, height: frameH * scale }}
+            title="The loaded roll: the label prints in its middle"
+          >
+            {image}
           </div>
+        ) : (
+          image
         )}
         {result?.serial_placeholder && (
           <span className="absolute top-3 right-3 inline-flex h-[22px] items-center rounded-full bg-info-bg px-2 t-caption text-info">Serial assigned at print</span>

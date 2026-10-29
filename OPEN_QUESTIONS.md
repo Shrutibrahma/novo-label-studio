@@ -319,3 +319,10 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     hardware: other roll sizes and narrow-label alignment, copies, darkness, error states (lid open, out of
     labels, cable pulled) as reported by the Windows spooler.
 
+99. **Smaller label on a bigger roll (owner's request, 2026-10-27).** "Loaded labels" on the printer is the roll.
+    A label that fits on it (width and height ≤ the roll's) no longer asks "I've loaded … labels": at job-payload
+    time the stored label bitmap is pasted in the middle of a roll-sized canvas (width capped at the print width)
+    and a 2-dot border is drawn 6 dots outside it (`frame_on_roll` in `render/zpl.py`). The stored bitmap, its
+    sha256 and History are unchanged; only the bytes sent to the printer differ. Migration 0004 adds
+    `printer.label_border`: `smaller` (default: border only when centered), `always` (also on same-size labels,
+    4 dots in from the edge, inside the 13-dot safe margin) or `never`. The print preview shows the label on the roll.

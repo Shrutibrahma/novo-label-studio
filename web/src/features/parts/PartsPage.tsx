@@ -123,7 +123,7 @@ export function PartsPage() {
                     <Td className="py-2">
                       <PartThumb part={p} />
                     </Td>
-                    <Td>
+                    <Td className="whitespace-nowrap">
                       <Mono className="text-text">{p.part_number}</Mono>
                     </Td>
                     <Td className="text-text">{p.part_name}</Td>

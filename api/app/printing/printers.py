@@ -39,6 +39,7 @@ class PrinterOut(BaseModel):
     offset_y_dots: int
     darkness: int | None
     speed_ips: float | None
+    label_border: str
     is_default: bool
     updated_at: datetime
 
@@ -57,6 +58,8 @@ class PrinterPatch(BaseModel):
     clear_speed: bool = False
     offset_x_dots: int | None = Field(default=None, ge=-200, le=200)
     offset_y_dots: int | None = Field(default=None, ge=-200, le=200)
+    # Border around each label: only when centered on a bigger roll, always, or never.
+    label_border: Literal["never", "smaller", "always"] | None = None
     is_default: bool | None = None
 
 
@@ -74,7 +77,7 @@ async def printer_out(db: DB, p: Printer) -> PrinterOut:
         reported_status=p.last_status, last_status_at=p.last_status_at, agent_last_seen_at=last_seen,
         loaded_label_size=size_out(size) if size else None, offset_x_dots=p.offset_x_dots,
         offset_y_dots=p.offset_y_dots, darkness=p.darkness,
-        speed_ips=float(p.speed_ips) if p.speed_ips is not None else None, is_default=p.is_default,
+        speed_ips=float(p.speed_ips) if p.speed_ips is not None else None, label_border=p.label_border, is_default=p.is_default,
         updated_at=p.updated_at,
     )
 
@@ -88,7 +91,7 @@ async def default_printer(db: DB) -> Printer:
 
 def snapshot(p: Printer) -> dict[str, object]:
     return {"loaded_label_size_id": p.loaded_label_size_id, "darkness": p.darkness, "speed_ips": p.speed_ips,
-            "offset_x_dots": p.offset_x_dots, "offset_y_dots": p.offset_y_dots, "is_default": p.is_default}
+            "offset_x_dots": p.offset_x_dots, "offset_y_dots": p.offset_y_dots, "label_border": p.label_border, "is_default": p.is_default}
 
 
 @router.get("", response_model=list[PrinterOut])
@@ -143,6 +146,8 @@ async def patch_printer(printer_id: uuid.UUID, body: PrinterPatch, user: Admin, 
         p.offset_x_dots = body.offset_x_dots
     if body.offset_y_dots is not None:
         p.offset_y_dots = body.offset_y_dots
+    if body.label_border is not None:
+        p.label_border = body.label_border
     if body.is_default is True and not p.is_default:
         await db.execute(update(Printer).where(Printer.id != p.id).values(is_default=False))
         await db.flush()

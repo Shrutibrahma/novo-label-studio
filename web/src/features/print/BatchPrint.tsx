@@ -5,12 +5,13 @@ import { Button } from "../../components/Button";
 import { Badge, Mono } from "../../components/Display";
 import { NumberStepper } from "../../components/Form";
 import { LabelPreview, type PreviewResult } from "../../components/LabelPreview";
+import { fitsOnRoll } from "../../lib/format";
 import { useCurrentLabelType } from "../../lib/labelTypes";
 import { api } from "../../lib/api";
 import { useDebounced, type PartDetail, type PartListItem } from "../../lib/parts";
 import { qk, useDefaultPrinter } from "../../lib/queries";
 import { printBlock } from "./blocking";
-import { ManualInputs, PrinterLine, ResultPanel, SizeBanner, usePrintRunner, type Outcome, type PrintItem } from "./PrintBits";
+import { ManualInputs, PrinterLine, ResultPanel, rollPreview, SizeBanner, usePrintRunner, type Outcome, type PrintItem } from "./PrintBits";
 
 interface RowState {
   manual: Record<string, unknown>;
@@ -50,8 +51,8 @@ export function BatchPrint({ parts, onClose }: { parts: PartListItem[]; onClose:
 
   const current = ordered[Math.min(index, ordered.length - 1)];
   const currentPreview = current ? byId.get(current)?.preview : undefined;
-  const loadedId = printer?.loaded_label_size?.id;
-  const mismatchSize = ids.map((id) => byId.get(id)?.detail?.config.size).find((s) => s && s.id !== loadedId);
+  const loadedSize = printer?.loaded_label_size;
+  const mismatchSize = ids.map((id) => byId.get(id)?.detail?.config.size).find((s) => s && !fitsOnRoll(s, loadedSize));
   const sizeMismatch = !sizeConfirmed && mismatchSize ? mismatchSize.name : null;
   const block = printBlock({ previews: ids.map((id) => byId.get(id)?.preview), printer, sizeMismatch });
 
@@ -79,7 +80,7 @@ export function BatchPrint({ parts, onClose }: { parts: PartListItem[]; onClose:
   return (
     <div className="flex h-[min(680px,calc(100vh-170px))] gap-6">
       <div className="flex w-[560px] shrink-0 flex-col gap-2">
-        <LabelPreview result={currentPreview} loading={!currentPreview} maxHeight={420} />
+        <LabelPreview result={currentPreview} loading={!currentPreview} maxHeight={420} roll={rollPreview(current ? byId.get(current)?.detail?.config.size : null, printer)} />
         <div className="flex items-center justify-center gap-3 t-body text-text-secondary">
           <button type="button" aria-label="Previous label" disabled={index <= 0} onClick={() => setIndex(index - 1)} className="rounded px-2 hover:bg-hover-fill disabled:text-text-muted">
             ‹

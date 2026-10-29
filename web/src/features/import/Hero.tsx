@@ -46,7 +46,7 @@ export function Hero({ parsing, error, onUploaded }: { parsing: string | null; e
             const f = e.dataTransfer.files[0];
             if (f && !busyName) void send(f);
           }}
-          className={`mt-10 flex h-[240px] w-[720px] flex-col items-center justify-center gap-3 rounded-[16px] border-2 border-dashed transition-colors duration-150 ${over ? "border-primary bg-hero-drop-bg-hover" : "border-hero-drop-border bg-hero-drop-bg"}`}
+          className={`mt-10 flex h-[240px] w-full max-w-[720px] flex-col items-center justify-center gap-3 rounded-[16px] border-2 border-dashed transition-colors duration-150 ${over ? "border-primary bg-hero-drop-bg-hover" : "border-hero-drop-border bg-hero-drop-bg"}`}
           data-testid="drop-zone"
         >
           {busyName ? (

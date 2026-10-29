@@ -136,11 +136,18 @@ async def plan_items(db: AsyncSession, body: PrintIn, labels_for: dict[str, str]
     return planned
 
 
+def fits_on(label: LabelSize, roll: LabelSize) -> bool:
+    return label.width_in <= roll.width_in and label.height_in <= roll.height_in
+
+
 async def check_loaded_size(db: AsyncSession, printer: Printer, planned: list[Planned], confirmed: bool,
                             user_id: uuid.UUID) -> None:
-    """14.1: loaded size ≠ label size blocks printing until the operator confirms what is loaded."""
+    """14.1: loaded size ≠ label size blocks printing until the operator confirms what is loaded. A label that fits
+    on the loaded roll is fine: it prints centered on it (migration 0004)."""
     sizes = {p.size.id: p.size for p in planned}
-    mismatched = [s for sid, s in sizes.items() if sid != printer.loaded_label_size_id]
+    roll = await db.get(LabelSize, printer.loaded_label_size_id) if printer.loaded_label_size_id else None
+    mismatched = [s for sid, s in sizes.items() if sid != printer.loaded_label_size_id
+                  and not (roll and fits_on(s, roll))]
     if not mismatched:
         return
     if not confirmed:
@@ -240,7 +247,7 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
                 raise _first_warning(result)
             rendered.append((p, index, serial, snap, result))
 
-    settings = printer_settings(printer)
+    settings = await printer_settings(db, printer)
     job_ids: list[uuid.UUID] = []
     for seq_in_request, start in enumerate(range(0, len(rendered), MAX_LABELS_PER_JOB), start=1):
         chunk = rendered[start:start + MAX_LABELS_PER_JOB]

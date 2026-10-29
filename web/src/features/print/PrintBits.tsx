@@ -6,6 +6,7 @@ import { Field, Input, SegmentedControl, Select } from "../../components/Form";
 import { api, ApiError, newIdempotencyKey } from "../../lib/api";
 import type { ManualField } from "../../lib/parts";
 import { effectivePrinterStatus, JOB_STATUS_WORD, PRINTER_STATUS_TONE, PRINTER_STATUS_WORD } from "../../lib/status";
+import { centeredOnRoll, sizeText } from "../../lib/format";
 import type { Printer } from "../../lib/types";
 import { waitForJobs, type Job } from "./jobs";
 
@@ -78,6 +79,24 @@ export function SizeBanner({ loaded, size, onConfirm }: { loaded: string | null;
       }
     >
       The printer has {loaded ?? "—"} labels loaded. This label is {size}.
+    </Banner>
+  );
+}
+
+type SizeLike = { width_in: number; height_in: number };
+
+/** What LabelPreview needs to show the label centered on the printer's bigger roll (null: same size, or no roll). */
+export function rollPreview(label: (SizeLike & { id: string }) | null | undefined, printer: Printer | undefined) {
+  const roll = printer?.loaded_label_size;
+  if (!label || !roll || !centeredOnRoll(label, roll)) return null;
+  return { width_in: Math.min(roll.width_in, printer.print_width_in), height_in: roll.height_in, border: printer.label_border !== "never" };
+}
+
+/** The label is smaller than the roll in the printer: it prints in the middle of each roll label. */
+export function RollNote({ label, roll, border }: { label: SizeLike; roll: SizeLike; border: Printer["label_border"] }) {
+  return (
+    <Banner tone="info">
+      Prints in the middle of the loaded {sizeText(roll)} labels{border === "never" ? "" : ", with a border to cut along"}. This label is {sizeText(label)}.
     </Banner>
   );
 }

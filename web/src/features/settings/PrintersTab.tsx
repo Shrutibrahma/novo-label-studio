@@ -42,6 +42,7 @@ function PrinterCard({ printer }: { printer: Printer }) {
     speed: numOrEmpty(printer.speed_ips),
     x: String(printer.offset_x_dots),
     y: String(printer.offset_y_dots),
+    border: printer.label_border,
   };
   const [form, setForm] = useState(init);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -63,6 +64,7 @@ function PrinterCard({ printer }: { printer: Printer }) {
       if (form.speed !== init.speed) Object.assign(body, form.speed === "" ? { clear_speed: true } : { speed_ips: Number(form.speed) });
       if (form.x !== init.x) body.offset_x_dots = Number(form.x);
       if (form.y !== init.y) body.offset_y_dots = Number(form.y);
+      if (form.border !== init.border) body.label_border = form.border;
       return api<Printer>(`/printers/${printer.id}`, { method: "PATCH", body, headers: { "If-Match": printer.updated_at } });
     },
     onSuccess: () => {
@@ -115,8 +117,20 @@ function PrinterCard({ printer }: { printer: Printer }) {
         <Field label="Print width (in)" htmlFor={`pr-width-${printer.id}`} error={errors.print_width_in} helper="Widest the head prints. ARKSCAN 2054A: 4.25.">
           <Input id={`pr-width-${printer.id}`} type="number" step="0.01" min={0.5} max={8.5} value={form.width} error={errors.print_width_in} onChange={(e) => setForm({ ...form, width: e.target.value })} />
         </Field>
-        <Field label="Loaded labels" htmlFor={`pr-size-${printer.id}`} className="col-span-2">
+        <Field label="Loaded labels (roll)" htmlFor={`pr-size-${printer.id}`} helper="Smaller labels print in the middle of these.">
           <Select id={`pr-size-${printer.id}`} value={form.loaded} options={sizeOptions} onChange={(e) => setForm({ ...form, loaded: e.target.value })} />
+        </Field>
+        <Field label="Border" htmlFor={`pr-border-${printer.id}`} helper="A thin line around each label, to cut or peel along.">
+          <Select
+            id={`pr-border-${printer.id}`}
+            value={form.border}
+            options={[
+              { value: "smaller", label: "When the label is smaller than the roll" },
+              { value: "always", label: "Always" },
+              { value: "never", label: "Never" },
+            ]}
+            onChange={(e) => setForm({ ...form, border: e.target.value as Printer["label_border"] })}
+          />
         </Field>
         <Field label="Darkness" htmlFor={`pr-dark-${printer.id}`} error={errors.darkness} helper="0–30. Empty = printer default.">
           <Input id={`pr-dark-${printer.id}`} type="number" min={0} max={30} value={form.darkness} error={errors.darkness} onChange={(e) => setForm({ ...form, darkness: e.target.value })} />

@@ -39,6 +39,16 @@ export function inches(n: number): string {
 }
 
 /** Label size as shown in tables: "4 × 2 in" (section 12.4). */
+/** A label smaller than the loaded roll prints centered on it, so it needs no "load these labels" step. */
+export function fitsOnRoll(label: { id: string; width_in: number; height_in: number }, roll: { id: string; width_in: number; height_in: number } | null | undefined): boolean {
+  return !!roll && (label.id === roll.id || (label.width_in <= roll.width_in && label.height_in <= roll.height_in));
+}
+
+/** True when the label prints in the middle of a bigger roll (not the roll's own size). */
+export function centeredOnRoll(label: { id: string; width_in: number; height_in: number }, roll: { id: string; width_in: number; height_in: number } | null | undefined): boolean {
+  return fitsOnRoll(label, roll) && !!roll && (label.width_in !== roll.width_in || label.height_in !== roll.height_in);
+}
+
 export function sizeText(size: { width_in: number; height_in: number } | null | undefined): string {
   if (!size) return "—";
   return `${inches(size.width_in)} × ${inches(size.height_in)} in`;

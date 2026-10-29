@@ -13,7 +13,7 @@ Novo Smart Labels v1, built milestone by milestone from `SPEC.md` + `schema.sql`
 | M6 History + hardening (reprint, void, backups, performance, README) | done |
 
 See `README.md` for setup, running, tests and switching the agent to USB, and the hardware checks still to run.
-Every decision the spec left open is in `OPEN_QUESTIONS.md` (#1–86). One approved schema change: migration 0002
+Every decision the spec left open is in `OPEN_QUESTIONS.md` (#1–99). One approved schema change: migration 0002
 (faster `search_parts()`), see #75.
 
 Last full run of `scripts/test.ps1`: API 99 passed / 9 skipped (5 need hardware, 4 opt-in performance),

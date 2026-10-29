@@ -63,9 +63,13 @@ async def job_out(db: DB, job: PrintJob) -> JobOut:
     )
 
 
-def printer_settings(p: Printer) -> PrinterSettings:
+async def printer_settings(db: DB, p: Printer) -> PrinterSettings:
+    """Includes the loaded roll's size, so a smaller label prints centered on it (migration 0004)."""
+    roll = await db.get(LabelSize, p.loaded_label_size_id) if p.loaded_label_size_id else None
+    canvas = canvas_for(roll.width_in, roll.height_in, p.print_width_in, p.dpi) if roll else None
     return PrinterSettings(darkness=p.darkness, speed_ips=p.speed_ips, offset_x_dots=p.offset_x_dots,
-                           offset_y_dots=p.offset_y_dots)
+                           offset_y_dots=p.offset_y_dots, roll_width_dots=canvas.width_dots if canvas else None,
+                           roll_height_dots=canvas.height_dots if canvas else None, border=p.label_border)
 
 
 async def assert_printer_ready(db: DB, printer: Printer) -> None:
@@ -127,7 +131,7 @@ async def print_test_label(printer_id: uuid.UUID, request: Request, user: Admin,
     lines = ["Novo Smart Labels test", f"{printer.name} · {printer.dpi} dpi", f"{size.name} · {w} × {h} in",
              format_display(now_utc(), zone), f"v{APP_VERSION}"]
     png = render_test_label(canvas_for(size.width_in, size.height_in, printer.print_width_in, printer.dpi), lines)
-    job = PrintJob(printer_id=printer.id, kind="test", payload_zpl=job_payload([(png, 1)], printer_settings(printer)),
+    job = PrintJob(printer_id=printer.id, kind="test", payload_zpl=job_payload([(png, 1)], await printer_settings(db, printer)),
                    status="rendered", created_by=user.id)
     db.add(job)
     await db.commit()

@@ -354,7 +354,8 @@ async def reprint(label_id: uuid.UUID, body: ReprintIn, user: AnyUser, db: DB,
         if prior is None:
             raise
         return await request_out(db, prior)
-    payload = await to_thread.run_sync(job_payload, [(png, original.copies)], printer_settings(printer))
+    payload = await to_thread.run_sync(job_payload, [(png, original.copies)],
+                                       await printer_settings(db, printer))
     job = PrintJob(request_id=req.id, seq_in_request=1, printer_id=printer.id, kind="reprint", payload_zpl=payload,
                    status="rendered", reprint_reason=body.reason, created_by=user.id)
     db.add(job)

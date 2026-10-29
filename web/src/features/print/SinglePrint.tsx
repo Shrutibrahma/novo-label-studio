@@ -6,13 +6,13 @@ import { Mono } from "../../components/Display";
 import { Checkbox, Field, NumberStepper, SegmentedControl } from "../../components/Form";
 import { LabelPreview, usePreview } from "../../components/LabelPreview";
 import { api } from "../../lib/api";
-import { inches } from "../../lib/format";
+import { centeredOnRoll, fitsOnRoll, inches } from "../../lib/format";
 import { qk, useDefaultPrinter, useSizes } from "../../lib/queries";
 import { useCustomFields, type LabelSpec, type PartDetail, type SpecField } from "../../lib/parts";
 import { useCurrentLabelType } from "../../lib/labelTypes";
 import { defaultRole, fieldName } from "../configure/types";
 import { printBlock } from "./blocking";
-import { ManualInputs, PrinterLine, ResultPanel, SizeBanner, usePrintRunner, type Outcome, type PrintItem } from "./PrintBits";
+import { ManualInputs, PrinterLine, ResultPanel, RollNote, rollPreview, SizeBanner, usePrintRunner, type Outcome, type PrintItem } from "./PrintBits";
 
 type Emphasis = LabelSpec["style"]["emphasis"];
 
@@ -68,7 +68,7 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
 
   const size = sizes.data?.find((s) => s.id === sizeId) ?? cfg.size;
   const loaded = printer?.loaded_label_size ?? null;
-  const sizeMismatch = !sizeConfirmed && loaded?.id !== sizeId ? size.name : null;
+  const sizeMismatch = !sizeConfirmed && !fitsOnRoll(size, loaded) ? size.name : null;
   const block = printBlock({ previews: [preview.data], printer, sizeMismatch });
 
   const distinct = box ? (boxMode === "all" ? boxTotal : 1) : serialOn ? quantity : 1;
@@ -118,7 +118,7 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
   return (
     <div className="flex h-[min(680px,calc(100vh-170px))] gap-6">
       <div className="w-[560px] shrink-0">
-        <LabelPreview result={preview.data} loading={preview.isFetching} maxHeight={460} />
+        <LabelPreview result={preview.data} loading={preview.isFetching} maxHeight={460} roll={rollPreview(size, printer)} />
       </div>
       <div className="flex w-[400px] min-w-0 flex-col gap-4">
         <div className="shrink-0">
@@ -236,6 +236,7 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
 
             <PrinterLine printer={printer} />
             {sizeMismatch && <SizeBanner loaded={loaded?.name ?? null} size={size.name} onConfirm={() => setSizeConfirmed(true)} />}
+            {!sizeMismatch && loaded && centeredOnRoll(size, loaded) && <RollNote label={size} roll={loaded} border={printer?.label_border ?? "smaller"} />}
             <p className="t-body text-text-secondary">
               {totalLabels} labels · {totalSerials} serials
             </p>

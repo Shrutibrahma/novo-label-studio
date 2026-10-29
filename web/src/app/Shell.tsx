@@ -64,9 +64,9 @@ function PrinterStatusBlock() {
   return (
     <Popover
       trigger={(p) => (
-        <button type="button" {...p} className="flex w-full items-center gap-3 rounded-[6px] px-4 py-3 text-left hover:bg-nav-item-hover">
+        <button type="button" {...p} title={`${printer.name} · ${word}`} className="flex w-full items-center justify-center gap-3 rounded-[6px] px-2 py-3 text-left hover:bg-nav-item-hover xl:justify-start xl:px-4">
           <StatusDot tone={PRINTER_STATUS_TONE[status]} />
-          <span className="flex min-w-0 flex-col">
+          <span className="hidden min-w-0 flex-col xl:flex">
             <span className="truncate text-[13px] leading-[18px] font-semibold text-white">{printer.name}</span>
             <span className="text-[12px] leading-4 text-nav-text">{word}</span>
           </span>
@@ -90,12 +90,15 @@ function Sidebar() {
   const isAdmin = useIsAdmin();
   const settings = useSettings();
   return (
-    <aside className="fixed inset-y-0 left-0 flex w-60 flex-col bg-nav-bg bg-[length:280px_280px]" style={{ backgroundImage: "url(/art/pattern.svg)" }}>
-      <div className="flex flex-col gap-3 px-4 pt-4 pb-3">
-        <div className="rounded-[8px] bg-surface px-3 py-2 shadow-card">
+    <aside className="fixed inset-y-0 left-0 z-30 flex w-[72px] flex-col bg-nav-bg bg-[length:280px_280px] xl:w-60" style={{ backgroundImage: "url(/art/pattern.svg)" }}>
+      <div className="flex flex-col gap-3 px-3 pt-4 pb-3 xl:px-4">
+        <div className="hidden rounded-[8px] bg-surface px-3 py-2 shadow-card xl:block">
           <BrandLogo className="h-11" />
         </div>
-        <div className="flex min-w-0 items-center gap-2 px-1">
+        <div className="flex justify-center xl:hidden" title="Novo Smart Labels">
+          <BrandMark />
+        </div>
+        <div className="hidden min-w-0 items-center gap-2 px-1 xl:flex">
           <Tag size={16} strokeWidth={1.75} className="shrink-0 text-nav-text" aria-hidden />
           <div className="flex min-w-0 flex-col">
             <span className="text-[15px] leading-5 font-semibold text-white">Novo Smart Labels</span>
@@ -103,18 +106,19 @@ function Sidebar() {
           </div>
         </div>
       </div>
-      <div className="mx-4 border-t border-nav-divider" />
-      <nav aria-label="Main" className="mt-3 flex flex-col gap-0.5 px-2">
+      <div className="mx-3 border-t border-nav-divider xl:mx-4" />
+      <nav aria-label="Main" className="mt-3 flex flex-col gap-1 px-2">
         {NAV.filter((n) => !n.adminOnly || isAdmin).map((n) => (
           <NavLink
             key={n.to}
             to={n.to}
+            title={n.label}
             className={({ isActive }) =>
-              `flex h-10 items-center gap-3 rounded-[6px] px-4 t-body-strong transition-colors duration-150 ease-out ${isActive ? "bg-nav-item-active text-nav-text-active shadow-card" : "text-nav-text hover:bg-nav-item-hover hover:text-nav-text-active"}`
+              `flex h-10 items-center justify-center gap-3 rounded-[6px] px-0 t-body-strong xl:justify-start xl:px-4 transition-colors duration-150 ease-out ${isActive ? "bg-nav-item-active text-nav-text-active shadow-card" : "text-nav-text hover:bg-nav-item-hover hover:text-nav-text-active"}`
             }
           >
-            <n.icon size={20} strokeWidth={1.75} aria-hidden />
-            {n.label}
+            <n.icon size={20} strokeWidth={1.75} aria-hidden className="shrink-0" />
+            <span className="hidden xl:inline">{n.label}</span>
           </NavLink>
         ))}
       </nav>
@@ -189,8 +193,8 @@ export function Shell({ children }: { children?: ReactNode }) {
   return (
     <div className="min-h-full">
       <Sidebar />
-      <div className="ml-60 flex min-h-screen flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-surface/90 px-8 backdrop-blur">
+      <div className="ml-[72px] flex min-h-screen min-w-0 flex-col xl:ml-60">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-surface/90 px-4 backdrop-blur md:px-8">
           <h1 className="flex items-center gap-3 t-h1 text-text">
             <span className="h-6 w-1 rounded-full bg-primary" aria-hidden />
             {title}
@@ -206,5 +210,5 @@ export function Shell({ children }: { children?: ReactNode }) {
 
 /** Standard page body: padding 32, max-width 1440, left-aligned (11.3). */
 export function Page({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`max-w-[1440px] p-8 ${className}`}>{children}</div>;
+  return <div className={`max-w-[1440px] p-4 md:p-8 ${className}`}>{children}</div>;
 }

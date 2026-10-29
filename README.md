@@ -44,6 +44,9 @@ is written to `agent-output/{job_id}.zpl` with a PNG of each label next to it.
    .\scripts\demo.ps1
    ```
 
+To host it on the internet instead (free Oracle Cloud VM, real HTTPS certificate), follow
+[`deploy/ORACLE.md`](deploy/ORACLE.md).
+
 ## Everyday commands
 
 | Command | Does |

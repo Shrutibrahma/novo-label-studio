@@ -1,0 +1,26 @@
+# Internet-facing server (e.g. an Oracle Cloud Always Free VM). Layered on docker-compose.yml by
+# scripts/server.sh: Caddy takes ports 80/443 and gets a free Let's Encrypt certificate for SITE_DOMAIN,
+# then forwards to the web container, which is no longer published on the host.
+services:
+  web:
+    ports: !reset []
+
+  caddy:
+    image: caddy:2.8.4
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?run scripts/server.sh up to set SITE_DOMAIN in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+
+volumes:
+  caddy_data:
+  caddy_config:

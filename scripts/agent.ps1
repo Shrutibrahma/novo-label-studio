@@ -3,6 +3,7 @@
 #   scripts/agent.ps1 -Mode usb                the real ZQ630 Plus through the Windows print queue
 #   scripts/agent.ps1 -Mode usb -Queue ARKSCAN -Language epl   an ARKSCAN 2054A (Seagull "Zebra LP2844" driver)
 #   scripts/agent.ps1 -Token <token>           the agent token from setup / Settings -> Printers (saved for next time)
+#   scripts/agent.ps1 -ApiBaseUrl https://<server>/api   use a hosted server instead of this laptop (saved too)
 # Force the simulated printer's status from another window:  scripts/agent.ps1 -SimStatus out_of_media
 param(
     [ValidateSet('simulated', 'usb')][string]$Mode = 'simulated',
@@ -26,14 +27,22 @@ if ($SimStatus) {
     try { & uv run --quiet labelstudio-agent sim-status $SimStatus; exit $LASTEXITCODE } finally { Pop-Location }
 }
 
-if ($Token) {
-    [System.IO.File]::WriteAllText($agentEnv, "AGENT_TOKEN=$Token`n", (New-Object System.Text.UTF8Encoding($false)))
-    Write-Host "Saved the agent token to agent/.env."
-} elseif (-not $env:AGENT_TOKEN -and (Test-Path $agentEnv)) {
+$saved = @{}
+if (Test-Path $agentEnv) {
     foreach ($line in Get-Content $agentEnv) {
-        if ($line -match '^\s*AGENT_TOKEN=(.+)$') { $Token = $Matches[1].Trim() }
+        if ($line -match '^\s*(AGENT_TOKEN|API_BASE_URL)=(.+)$') { $saved[$Matches[1]] = $Matches[2].Trim() }
     }
 }
+if ($Token -or $ApiBaseUrl) {
+    # Remember the token and a hosted server's address (e.g. -ApiBaseUrl https://labels.example.com/api).
+    if ($Token) { $saved['AGENT_TOKEN'] = $Token }
+    if ($ApiBaseUrl) { $saved['API_BASE_URL'] = $ApiBaseUrl }
+    $content = ($saved.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)`n" }) -join ''
+    [System.IO.File]::WriteAllText($agentEnv, $content, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "Saved the agent settings to agent/.env."
+}
+if (-not $Token -and -not $env:AGENT_TOKEN) { $Token = $saved['AGENT_TOKEN'] }
+if (-not $ApiBaseUrl -and -not $env:API_BASE_URL) { $ApiBaseUrl = $saved['API_BASE_URL'] }
 if (-not $Token) { $Token = $env:AGENT_TOKEN }
 if (-not $Token) {
     Fail "No agent token. Run:  scripts/agent.ps1 -Token <token>   (the token is shown once in setup step 3, or issue a new one in Settings -> Printers)."
@@ -49,7 +58,9 @@ $env:AGENT_PRINTER_QUEUE = $Queue
 $env:AGENT_PRINTER_LANGUAGE = $Language
 $env:AGENT_OUTPUT_DIR = Join-Path $RepoRoot 'agent-output'
 if (-not $env:AGENT_POLL_SECONDS) { $env:AGENT_POLL_SECONDS = '1' }
-if (Test-Path $cert) { $env:AGENT_CA_BUNDLE = $cert }
+# The self-signed certificate only applies to the local server; a hosted one has a normal public certificate.
+$isLocal = ([Uri]$ApiBaseUrl).Host -in @('localhost', '127.0.0.1', 'labels.local')
+if ($isLocal -and (Test-Path $cert)) { $env:AGENT_CA_BUNDLE = $cert }
 if ($HsReadback) { $env:AGENT_HS_READBACK = '1' }  # [SPIKE] ~HS status readback over USB
 
 Write-Host "Starting the print agent ($Mode, $Language) against $ApiBaseUrl. Press Ctrl+C to stop."

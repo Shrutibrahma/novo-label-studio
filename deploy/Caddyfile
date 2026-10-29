@@ -1,0 +1,10 @@
+# Server mode only (docker-compose.server.yml). Caddy obtains and renews the Let's Encrypt certificate for
+# SITE_DOMAIN and forwards everything to the web container (nginx), which keeps its own self-signed
+# certificate on the internal Docker network.
+{$SITE_DOMAIN} {
+	reverse_proxy https://web:443 {
+		transport http {
+			tls_insecure_skip_verify
+		}
+	}
+}

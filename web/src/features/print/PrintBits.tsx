@@ -16,6 +16,10 @@ export interface PrintItem {
   quantity: number;
   manual_values: Record<string, unknown>;
   group?: { total: number; start_index: number; count: number; group_id?: string | null };
+  /** The label type to print as; omitted = the part's resolved type (v1.1 D11 amended). */
+  label_type_id?: string;
+  /** Admin only: true saves label_type_id as the part's type, false clears its saved type. */
+  set_preferred?: boolean;
 }
 
 export interface PrintResponse {

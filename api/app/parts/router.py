@@ -22,7 +22,8 @@ from app.audit import audit
 from app.auth.deps import DB, Admin, AnyUser
 from app.concurrency import check_if_match
 from app.config import get_settings
-from app.configs.effective import effective_config
+from app.configs.effective import effective_config, resolve_type
+from app.configs.resolve import resolve_label_type, resolve_many
 from app.errors import ApiError
 from app.models import AppUser, Asset, LabelConfig, LabelSize, LabelType, Part, PartAlias
 from app.parts.custom_fields import all_fields, as_def
@@ -53,6 +54,14 @@ class SizeBrief(BaseModel):
     height_in: float
 
 
+class LabelTypeRef(BaseModel):
+    """The label type a part prints as, and why (v1.1 D11 amended)."""
+
+    id: str
+    name: str
+    reason: Literal["preferred", "last_printed", "print_as", "first"]
+
+
 class PartListItem(BaseModel):
     id: str
     part_number: str
@@ -71,6 +80,7 @@ class PartListItem(BaseModel):
     updated_at: datetime
     score: float | None = None
     matched_on: str | None = None
+    label_type: LabelTypeRef | None = None
 
 
 class PartList(BaseModel):
@@ -113,6 +123,8 @@ class PartDetail(BaseModel):
     image_version: str | None
     aliases: list[AliasOut]
     config: ConfigBrief
+    label_type: LabelTypeRef
+    preferred_label_type_id: str | None
     has_override: bool
     label_state: str
     last_printed_at: datetime | None
@@ -136,6 +148,7 @@ class PartPatch(BaseModel):
     revision: str | None = Field(default=None, max_length=200)
     clear: list[Literal["description", "revision"]] = Field(default_factory=list)
     custom_data: dict[str, Any] | None = None
+    preferred_label_type_id: uuid.UUID | None = None  # null: not set (prints as last printed)
 
 
 # ---------------------------------------------------------------- list / search
@@ -143,16 +156,11 @@ _SELECT = """
 SELECT p.id, p.part_number, p.part_number_norm, p.part_name, p.description, p.revision, p.status,
        p.image_asset_id, p.updated_at,
        ln.alias AS label_name,
-       coalesce(f.label_state, 'never_printed') AS label_state, f.last_printed_at,
-       ls.id AS size_id, ls.name AS size_name, ls.width_in, ls.height_in,
-       (pc.id IS NOT NULL) AS has_override, coalesce(pc.version, dc.version) AS config_version
+       coalesce(f.label_state, 'never_printed') AS label_state, f.last_printed_at
 """
 _JOINS = """
 LEFT JOIN part_alias ln ON ln.part_id = p.id AND ln.is_label_name
 LEFT JOIN part_label_freshness f ON f.part_id = p.id
-LEFT JOIN label_config pc ON pc.part_id = p.id AND pc.scope = 'part' AND pc.is_current
-LEFT JOIN label_config dc ON dc.scope = 'default' AND dc.is_current
-LEFT JOIN label_size ls ON ls.id = coalesce(pc.label_size_id, dc.label_size_id)
 """
 
 # search_parts() only returns active parts. For the Parts screen's Inactive/Archived/All filters the same
@@ -202,15 +210,14 @@ def _decode_cursor(cursor: str | None) -> dict[str, Any] | None:
 
 
 def _item(row: Any) -> PartListItem:
-    size = (SizeBrief(id=str(row.size_id), name=row.size_name, width_in=float(row.width_in),
-                      height_in=float(row.height_in)) if row.size_id else None)
+    """Size, version and override are filled in by with_types() for the part's resolved label type."""
     return PartListItem(
         id=str(row.id), part_number=row.part_number, part_name=row.part_name, description=row.description,
         revision=row.revision, status=row.status, label_name=row.label_name,
         has_image=row.image_asset_id is not None,
         image_version=str(row.image_asset_id) if row.image_asset_id else None,
-        label_state=row.label_state, last_printed_at=row.last_printed_at, size=size,
-        config_version=row.config_version, has_override=bool(row.has_override), updated_at=row.updated_at,
+        label_state=row.label_state, last_printed_at=row.last_printed_at, size=None,
+        config_version=None, has_override=False, updated_at=row.updated_at,
         score=getattr(row, "score", None), matched_on=None,
     )
 
@@ -244,6 +251,7 @@ async def list_parts(
     printed_within_days: Annotated[int | None, Query(ge=1, le=365)] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     cursor: str | None = None,
+    print_as: uuid.UUID | None = None,
 ) -> PartList:
     params: dict[str, Any] = {"lim": limit + 1}
     where = _filters(status, label_state, printed_within_days, params)
@@ -261,7 +269,7 @@ async def list_parts(
                "ORDER BY b.score DESC, p.part_number LIMIT :lim OFFSET :off")
         rows = (await db.execute(text(sql), params)).all()
         more = len(rows) > limit
-        return PartList(items=[_item(r) for r in rows[:limit]],
+        return PartList(items=await with_types(db, [_item(r) for r in rows[:limit]], print_as),
                         next_cursor=_encode_cursor({"o": offset + limit}) if more else None)
 
     c = _decode_cursor(cursor)
@@ -274,7 +282,34 @@ async def list_parts(
     more = len(rows) > limit
     page = rows[:limit]
     nxt = _encode_cursor({"n": page[-1].part_number_norm, "i": str(page[-1].id)}) if more and page else None
-    return PartList(items=[_item(r) for r in page], next_cursor=nxt)
+    return PartList(items=await with_types(db, [_item(r) for r in page], print_as), next_cursor=nxt)
+
+
+async def with_types(db: AsyncSession, items: list[PartListItem], print_as: uuid.UUID | None) -> list[PartListItem]:
+    """Each part's resolved label type (v1.1 D11 amended), and the size and version of its design for that type."""
+    ids = [uuid.UUID(i.id) for i in items]
+    resolved = await resolve_many(db, ids, print_as)
+    type_ids = {r.type.id for r in resolved.values()}
+    if not type_ids:
+        return items
+    cfgs = (await db.execute(select(LabelConfig).where(
+        LabelConfig.is_current.is_(True), LabelConfig.label_type_id.in_(type_ids),
+        (LabelConfig.scope == "default") | LabelConfig.part_id.in_(ids)))).scalars().all()
+    defaults = {c.label_type_id: c for c in cfgs if c.scope == "default"}
+    overrides = {(c.label_type_id, c.part_id): c for c in cfgs if c.scope == "part"}
+    sizes = {z.id: z for z in (await db.execute(select(LabelSize).where(
+        LabelSize.id.in_({c.label_size_id for c in cfgs})))).scalars()}
+    for item, pid in zip(items, ids, strict=True):
+        r = resolved.get(pid)
+        if r is None:
+            continue
+        item.label_type = LabelTypeRef(id=str(r.type.id), name=r.type.name, reason=r.reason)
+        cfg = overrides.get((r.type.id, pid)) or defaults.get(r.type.id)
+        if cfg is not None:
+            z = sizes[cfg.label_size_id]
+            item.size = SizeBrief(id=str(z.id), name=z.name, width_in=float(z.width_in), height_in=float(z.height_in))
+            item.config_version, item.has_override = cfg.version, cfg.scope == "part"
+    return items
 
 
 # ---------------------------------------------------------------- detail
@@ -310,10 +345,13 @@ async def get_part(db: AsyncSession, part_id: uuid.UUID, lock: bool = False) -> 
     return part
 
 
-async def part_detail(db: AsyncSession, part: Part, type_id: uuid.UUID | None = None) -> PartDetail:
-    """`config` is the part's effective config for that label type (the first type when not given)."""
+async def part_detail(db: AsyncSession, part: Part, type_id: uuid.UUID | None = None,
+                      print_as: uuid.UUID | None = None) -> PartDetail:
+    """`label_type` is the type the part prints as (v1.1 D11 amended; `print_as` is the browser's choice).
+    `config` is the part's effective config for `type_id` when given, else for that resolved type."""
     aliases = await aliases_of(db, part.id)
-    cfg = await effective_config(db, part.id, type_id)
+    resolved, reason = await resolve_label_type(db, part.id, print_as)
+    cfg = await effective_config(db, part.id, type_id or resolved.id)
     fresh = (await db.execute(text("SELECT label_state, last_printed_at FROM part_label_freshness "
                                    "WHERE part_id = :p"), {"p": part.id})).one()
     label = next((a.alias for a in aliases if a.is_label_name), None)
@@ -323,14 +361,17 @@ async def part_detail(db: AsyncSession, part: Part, type_id: uuid.UUID | None = 
         label_name=label, has_image=part.image_asset_id is not None,
         image_version=str(part.image_asset_id) if part.image_asset_id else None,
         aliases=[alias_out(a) for a in aliases], config=await config_brief(db, cfg),
+        label_type=LabelTypeRef(id=str(resolved.id), name=resolved.name, reason=reason),
+        preferred_label_type_id=str(part.preferred_label_type_id) if part.preferred_label_type_id else None,
         has_override=cfg.scope == "part", label_state=fresh.label_state, last_printed_at=fresh.last_printed_at,
         created_at=part.created_at, updated_at=part.updated_at,
     )
 
 
 @router.get("/parts/{part_id}", response_model=PartDetail)
-async def read_part(part_id: uuid.UUID, _: AnyUser, db: DB, type_id: uuid.UUID | None = None) -> PartDetail:
-    return await part_detail(db, await get_part(db, part_id), type_id)
+async def read_part(part_id: uuid.UUID, _: AnyUser, db: DB, type_id: uuid.UUID | None = None,
+                    print_as: uuid.UUID | None = None) -> PartDetail:
+    return await part_detail(db, await get_part(db, part_id), type_id, print_as)
 
 
 # ---------------------------------------------------------------- create / update
@@ -392,7 +433,7 @@ async def assert_number_free(db: AsyncSession, part_number: str, exclude: uuid.U
 def snapshot(p: Part) -> dict[str, Any]:
     return {"part_number": p.part_number, "part_name": p.part_name, "description": p.description,
             "revision": p.revision, "custom_data": p.custom_data, "status": p.status,
-            "image_asset_id": p.image_asset_id}
+            "image_asset_id": p.image_asset_id, "preferred_label_type_id": p.preferred_label_type_id}
 
 
 def _check(key: str, value: Any, required: bool) -> str | None:
@@ -475,6 +516,10 @@ async def update_part(part_id: uuid.UUID, body: PartPatch, user: Admin, db: DB,
     if body.custom_data is not None:
         defs = {f.key: as_def(f) for f in await all_fields(db)}
         part.custom_data = apply_custom(defs, part.custom_data, body.custom_data, is_new=False)
+    if "preferred_label_type_id" in body.model_fields_set:
+        if body.preferred_label_type_id is not None:
+            await resolve_type(db, body.preferred_label_type_id)  # an active type, else NOT_FOUND
+        part.preferred_label_type_id = body.preferred_label_type_id
     after = snapshot(part)
     if after != before:
         part.updated_by = user.id

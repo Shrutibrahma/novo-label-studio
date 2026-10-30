@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.auth.deps import DB, AnyUser
 from app.configs.effective import effective_config
+from app.configs.resolve import resolve_label_type
 from app.configs.router import DraftConfig, checked_spec
 from app.errors import ApiError
 from app.models import LabelConfig, Part
@@ -28,6 +29,7 @@ class PreviewIn(BaseModel):
     config: DraftConfig | None = None
     manual_values: dict[str, Any] | None = None
     house_style: dict[str, Any] | None = None  # an unsaved Settings → Label style draft (Admin only)
+    print_as: uuid.UUID | None = None  # the browser's "Print as" choice, when label_type_id is omitted
 
 
 class WarningOut(BaseModel):
@@ -63,7 +65,8 @@ async def preview(body: PreviewIn, request: Request, user: AnyUser, db: DB) -> P
         cfg = ConfigLike(body.config.label_size_id, body.config.spec, body.config.qr_mode, body.config.serial_mode,
                          body.label_type_id)
     else:
-        stored = await db.get(LabelConfig, body.config_id) if body.config_id else await effective_config(db, part.id, body.label_type_id)
+        type_id = body.label_type_id or (await resolve_label_type(db, part.id, body.print_as))[0].id
+        stored = await db.get(LabelConfig, body.config_id) if body.config_id else await effective_config(db, part.id, type_id)
         if stored is None:
             raise ApiError("NOT_FOUND")
         cfg = ConfigLike(stored.label_size_id, stored.spec, stored.qr_mode, stored.serial_mode, stored.label_type_id)

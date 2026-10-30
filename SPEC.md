@@ -85,6 +85,7 @@ These decisions are final for v1. Changing one requires editing this table first
 
 | # | Decision | Rationale |
 | --- | --- | --- |
+| D11 (amended, v1.1) | Each part remembers its label type. Type resolution when printing a part: (1) the part's **preferred type** (`part.preferred_label_type_id`, migration 0006), if set and not archived; (2) else the type of the part's most recent print (not a reprint); (3) else the browser's "Print as" choice; (4) else the first type. Resolved by the server (`resolve_label_type`) for part reads, preview and print | G2: operators shouldn't re-pick the type for every part |
 | D21 (v1.1) | **House label style.** One company-wide style (font, frame, title band, footer) applied by the renderer to every label type. Per-type designs control content and box structure only; they no longer choose font or weight. Stored per label in `generated.house_style` (migration 0005) | G3: uniform labels |
 
 ## 3. Hardware

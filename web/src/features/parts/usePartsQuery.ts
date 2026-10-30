@@ -8,6 +8,8 @@ export interface PartsParams {
   status?: "active" | "inactive" | "archived" | "all";
   label_state?: "current" | "out_of_date" | "never_printed";
   printed_within_days?: number;
+  /** The browser's "Print as" choice: parts without a saved or last-printed type resolve to it. */
+  print_as?: string;
 }
 
 function toSearch(params: PartsParams, cursor: string | null): string {

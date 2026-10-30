@@ -17,6 +17,7 @@ const CORE = [
   { value: "description", label: "Description" },
   { value: "revision", label: "Revision" },
   { value: "image", label: "Image (pictures in cells)" },
+  { value: "label_type", label: "Label type" },
 ];
 
 function truncate(s: string, n: number): string {

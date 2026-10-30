@@ -11,8 +11,9 @@ const QR_WORD = { none: "None", part: "Part", serial: "Serial" } as const;
 /** 12.5 Preview dialog: read-only, width 720. */
 export function PreviewDialog({ part, onClose, onPrint }: { part: PartListItem; onClose: () => void; onPrint: () => void }) {
   const labelType = useCurrentLabelType();
-  const detail = usePartForType(part.id, labelType?.id);
-  const preview = usePreview({ part_id: part.id, label_type_id: labelType?.id }, 0);
+  // The type the part resolves to (saved, last printed, then Print as).
+  const detail = usePartForType(part.id, undefined, labelType?.id);
+  const preview = usePreview({ part_id: part.id, print_as: labelType?.id }, 0);
   const cfg = detail.data?.config;
   const warnings = preview.data?.warnings ?? [];
   return (

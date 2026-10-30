@@ -9,6 +9,8 @@ from collections.abc import Iterable
 CORE_TARGETS = ("part_number", "part_name", "description", "revision")
 # Pictures placed in cells (XLSX) become the part image.
 IMAGE_TARGET = "image"
+# The part's preferred label type, by the type's name (v1.1 5.4).
+LABEL_TYPE_TARGET = "label_type"
 
 SYNONYMS: dict[str, tuple[str, ...]] = {
     "part_number": ("part_number", "part_no", "partno", "pn", "part", "item", "item_no", "item_number",
@@ -17,6 +19,7 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
     "description": ("description", "desc", "desc1", "long_description", "details"),
     "revision": ("revision", "rev", "rev_level", "revision_level"),
     IMAGE_TARGET: ("image", "images", "picture", "pictures", "photo", "photos", "pic", "img", "part_image"),
+    LABEL_TYPE_TARGET: ("label_type", "labeltype", "print_as"),
 }
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")

@@ -9,7 +9,8 @@ import { api } from "../../lib/api";
 import { centeredOnRoll, fitsOnRoll, inches } from "../../lib/format";
 import { qk, useDefaultPrinter, useSizes } from "../../lib/queries";
 import { useCustomFields, type LabelSpec, type PartDetail, type SpecField } from "../../lib/parts";
-import { useCurrentLabelType } from "../../lib/labelTypes";
+import { useLabelTypes } from "../../lib/labelTypes";
+import { useIsAdmin } from "../../app/auth";
 import { defaultRole, fieldName } from "../configure/types";
 import { printBlock } from "./blocking";
 import { ManualInputs, PrinterLine, ResultPanel, RollNote, rollPreview, SizeBanner, usePrintRunner, type Outcome, type PrintItem } from "./PrintBits";
@@ -29,7 +30,14 @@ function showOnLabelKeys(part: PartDetail, custom: { key: string; label: string;
   return keys;
 }
 
-export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () => void }) {
+export function SinglePrint({ part, printAs, onType, onClose }: {
+  part: PartDetail;
+  /** The browser's "Print as" choice (for parts without a saved type). */
+  printAs: string | undefined;
+  /** Another label type was picked: the host reloads the part's design for it. */
+  onType: (typeId: string) => void;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
   const { printer } = useDefaultPrinter();
   const sizes = useSizes();
@@ -55,6 +63,12 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [saved, setSaved] = useState(false);
   const runner = usePrintRunner();
+  const isAdmin = useIsAdmin();
+  const types = useLabelTypes();
+  const typeId = cfg.label_type_id;
+  const typeName = cfg.label_type_name;
+  const isPreferred = part.preferred_label_type_id === typeId;
+  const [always, setAlways] = useState(isPreferred);
 
   const customLabels = Object.fromEntries((custom.data ?? []).map((f) => [f.key, f.label]));
   const draft = useMemo(
@@ -63,8 +77,7 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
   );
   const boxIndex = boxMode === "all" ? 1 : boxNumber;
   const manualForPreview = box ? { ...manual, [box.key]: { index: boxIndex, total: boxTotal } } : manual;
-  const labelType = useCurrentLabelType();
-  const preview = usePreview({ part_id: part.id, config: draft, manual_values: manualForPreview }, 250);
+  const preview = usePreview({ part_id: part.id, config: draft, manual_values: manualForPreview, label_type_id: typeId }, 250);
 
   const size = sizes.data?.find((s) => s.id === sizeId) ?? cfg.size;
   const loaded = printer?.loaded_label_size ?? null;
@@ -89,17 +102,20 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
       copies,
       quantity: box ? 1 : serialOn ? quantity : 1,
       manual_values: manual,
+      label_type_id: typeId,
+      // "Always print … as …": checking saves the type; unchecking the saved type clears it (Admin only).
+      ...(isAdmin && always !== isPreferred ? { set_preferred: always } : {}),
       ...(box ? { group: { total: boxTotal, start_index: start, count, group_id: gid } } : {}),
     },
   ];
 
   const print = async (start = box && boxMode === "one" ? boxNumber : 1, count = box ? (boxMode === "all" ? boxTotal : 1) : 1, gid = groupId) => {
     if (selectionChanged) {
-      await api(`/parts/${part.id}/selection`, { method: "PUT", body: { fields, label_size_id: sizeId, emphasis, label_type_id: labelType?.id ?? null } });
+      await api(`/parts/${part.id}/selection`, { method: "PUT", body: { fields, label_size_id: sizeId, emphasis, label_type_id: typeId } });
       setSaved(true);
       void qc.invalidateQueries({ queryKey: qk.part(part.id) });
     }
-    const result = await runner.run(items(start, count, gid), sizeConfirmed, labelType?.id);
+    const result = await runner.run(items(start, count, gid), sizeConfirmed, printAs);
     if (result) {
       setOutcome(result);
       if (result.kind === "sent") {
@@ -126,6 +142,12 @@ export function SinglePrint({ part, onClose }: { part: PartDetail; onClose: () =
           <Mono className="t-body text-text-secondary">{part.part_number}</Mono>
           <p className="t-small text-text-secondary">{part.part_name}</p>
         </div>
+        {!outcome && (types.data?.length ?? 0) > 1 && (
+          <div className="flex shrink-0 flex-col gap-2">
+            <SegmentedControl ariaLabel="Label type" value={typeId} onChange={onType} options={(types.data ?? []).map((t) => ({ value: t.id, label: t.name }))} />
+            {isAdmin && <Checkbox label={`Always print ${part.part_number} as ${typeName}`} checked={always} onChange={setAlways} />}
+          </div>
+        )}
 
         <div className="-mr-2 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pr-2">
         {outcome ? (

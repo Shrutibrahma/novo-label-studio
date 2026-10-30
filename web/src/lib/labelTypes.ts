@@ -65,10 +65,15 @@ export function useCurrentLabelType(): LabelType | undefined {
   return list.find((t) => t.id === stored) ?? list[0];
 }
 
-/** A part with its effective design for a label type (the first type when none is given). */
-export function usePartForType(partId: string, typeId: string | undefined) {
+/** A part with its effective design for a label type; without one, for the type it resolves to (saved type, last
+ * printed, then `printAs`, then the first type). */
+export function usePartForType(partId: string, typeId: string | undefined, printAs?: string) {
+  const params = new URLSearchParams();
+  if (typeId) params.set("type_id", typeId);
+  if (printAs) params.set("print_as", printAs);
+  const qs = params.toString();
   return useQuery({
-    queryKey: [...qk.part(partId), typeId ?? "first"],
-    queryFn: () => api<PartDetail>(`/parts/${partId}${typeId ? `?type_id=${typeId}` : ""}`),
+    queryKey: [...qk.part(partId), typeId ?? "resolved", printAs ?? null],
+    queryFn: () => api<PartDetail>(`/parts/${partId}${qs ? `?${qs}` : ""}`),
   });
 }

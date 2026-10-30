@@ -144,6 +144,8 @@ class Part(Base):
     description: Mapped[str | None] = mapped_column(Text)
     revision: Mapped[str | None] = mapped_column(Text)
     image_asset_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("asset.id"))
+    # The label type this part always prints as (v1.1 D11 amended, migration 0006); NULL = not set.
+    preferred_label_type_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("label_type.id"))
     custom_data: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=DB_DEFAULT)
     status: Mapped[str] = mapped_column(Text, server_default=DB_DEFAULT)
     source: Mapped[str] = mapped_column(Text, server_default=DB_DEFAULT)

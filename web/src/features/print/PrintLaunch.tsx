@@ -1,4 +1,5 @@
 import { Eye, Printer as PrinterIcon } from "lucide-react";
+import { useState } from "react";
 import { Button, IconButton } from "../../components/Button";
 import { Skeleton } from "../../components/Display";
 import { Dialog } from "../../components/Overlay";
@@ -27,10 +28,15 @@ export function PrintRowActions({ part, onLaunch }: { part: PartListItem; onLaun
 }
 
 function SingleHost({ part, onClose }: { part: PartListItem; onClose: () => void }) {
-  const type = useCurrentLabelType();
-  // The part's design for the label type chosen on Print Labels.
-  const detail = usePartForType(part.id, type?.id);
-  return detail.data ? <SinglePrint part={detail.data} onClose={onClose} /> : <Skeleton className="h-[460px] w-full" />;
+  const printAs = useCurrentLabelType();
+  // The type picked in the dialog; until then the one the part resolves to (saved, last printed, Print as).
+  const [typeId, setTypeId] = useState<string | undefined>(undefined);
+  const detail = usePartForType(part.id, typeId, printAs?.id);
+  return detail.data ? (
+    <SinglePrint key={detail.data.config.label_type_id} part={detail.data} printAs={printAs?.id} onType={setTypeId} onClose={onClose} />
+  ) : (
+    <Skeleton className="h-[460px] w-full" />
+  );
 }
 
 export function PrintLaunchHost({ launch, onClose, onSwitch }: { launch: PrintLaunch | null; onClose: () => void; onSwitch: (l: PrintLaunch) => void }) {

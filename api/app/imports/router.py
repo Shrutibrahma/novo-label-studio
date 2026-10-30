@@ -23,16 +23,16 @@ from app.auth.sessions import now_utc
 from app.errors import ApiError, message_for
 from app.imports import service
 from app.imports.engine import classify, clean, duplicate_rows
-from app.imports.mapping import CORE_TARGETS, IMAGE_TARGET, signature
+from app.imports.mapping import CORE_TARGETS, IMAGE_TARGET, LABEL_TYPE_TARGET, signature
 from app.imports.parse import MAX_FILE_BYTES, ParseError, file_kind
-from app.models import ImportBatch, ImportMapping, ImportRow, Part
+from app.models import ImportBatch, ImportMapping, ImportRow, LabelType, Part
 from app.parts.values import normalize_part_number
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
 NEW_PART_COLUMNS = ["part_number", "part_name", "description", "revision", "custom_data", "status", "source",
-                    "last_import_batch_id", "created_by", "updated_by", "image_asset_id"]
-CORE_KEYS = ("part_number", "part_name", "description", "revision", IMAGE_TARGET)
+                    "last_import_batch_id", "created_by", "updated_by", "image_asset_id", "preferred_label_type_id"]
+CORE_KEYS = ("part_number", "part_name", "description", "revision", IMAGE_TARGET, LABEL_TYPE_TARGET)
 
 
 def _image_id(data: dict[str, Any]) -> uuid.UUID | None:
@@ -230,7 +230,7 @@ async def confirm_mapping(batch_id: uuid.UUID, body: MappingIn, user: Admin, db:
     if meta is None or not meta.headers:
         raise ApiError("INVALID_STATE")
     defs = await service.custom_defs(db)
-    valid = set(CORE_TARGETS) | {IMAGE_TARGET} | set(defs)
+    valid = set(CORE_TARGETS) | {IMAGE_TARGET, LABEL_TYPE_TARGET} | set(defs)
     mapping = {h: (body.mapping.get(h) or None) for h in meta.headers}
     targets = [t for t in mapping.values() if t]
     if any(t not in valid for t in targets):
@@ -338,6 +338,13 @@ async def commit_import(batch_id: uuid.UUID, user: Admin, db: DB) -> CommitOut:
     saved = await db.get(ImportMapping, batch.mapping_id) if batch.mapping_id else None
     targets = list(dict.fromkeys(saved.mapping.values())) if saved else []
     ctx = await service.load_context(db, targets)
+    type_ids = {name.lower(): t_id for t_id, name in (await db.execute(
+        select(LabelType.id, LabelType.name).where(LabelType.archived.is_(False)))).all()}
+
+    def preferred(data: dict[str, Any]) -> uuid.UUID | None:
+        name = data.get(LABEL_TYPE_TARGET)
+        return type_ids.get(name.strip().lower()) if isinstance(name, str) else None
+
     rows = list((await db.execute(select(ImportRow).where(ImportRow.batch_id == batch.id,
                                                           ImportRow.accepted.is_(True),
                                                           ImportRow.action.in_(("new", "update", "missing")))
@@ -360,7 +367,7 @@ async def commit_import(batch_id: uuid.UUID, user: Admin, db: DB) -> CommitOut:
                              "description": r.data.get("description"), "revision": r.data.get("revision"),
                              "custom_data": custom, "status": "active", "source": "import",
                              "last_import_batch_id": batch.id, "created_by": user.id, "updated_by": user.id,
-                             "image_asset_id": _image_id(r.data)})
+                             "image_asset_id": _image_id(r.data), "preferred_label_type_id": preferred(r.data)})
         else:
             if existing is None or existing.id != r.part_id:
                 raise ApiError("STALE_WRITE")
@@ -371,24 +378,28 @@ async def commit_import(batch_id: uuid.UUID, user: Admin, db: DB) -> CommitOut:
                             "b_desc": r.data.get("description", cur.get("description")),
                             "b_rev": r.data.get("revision", cur.get("revision")), "b_custom": custom,
                             "b_status": "active" if r.diff and "status" in r.diff else existing.status,
-                            "b_image": _image_id(r.data)})
+                            "b_image": _image_id(r.data), "b_type": preferred(r.data)})
     try:
         # COPY instead of row-by-row INSERT/UPDATE: a 50,000-row commit stays a few seconds (row triggers still fire).
         await service.copy_records(db, "part", NEW_PART_COLUMNS, [
             (r["part_number"], r["part_name"], r["description"], r["revision"], json.dumps(r["custom_data"]), "active",
-             "import", batch.id, user.id, user.id, r["image_asset_id"]) for r in new_rows])
+             "import", batch.id, user.id, user.id, r["image_asset_id"], r["preferred_label_type_id"])
+            for r in new_rows])
         if updates:
             await db.execute(text("CREATE TEMP TABLE import_update (id uuid PRIMARY KEY, part_name text, "
-                                  "description text, revision text, custom_data jsonb, status text, image_asset_id uuid) "
+                                  "description text, revision text, custom_data jsonb, status text, image_asset_id uuid, "
+                                  "preferred_label_type_id uuid) "
                                   "ON COMMIT DROP"))
             await service.copy_records(db, "import_update", ["id", "part_name", "description", "revision", "custom_data",
-                                                              "status", "image_asset_id"],
+                                                              "status", "image_asset_id",
+                                                              "preferred_label_type_id"],
                                        [(u["b_id"], u["b_name"], u["b_desc"], u["b_rev"], json.dumps(u["b_custom"]),
-                                         u["b_status"], u["b_image"]) for u in updates])
+                                         u["b_status"], u["b_image"], u["b_type"]) for u in updates])
             await db.execute(text(
                 "UPDATE part p SET part_name = u.part_name, description = u.description, revision = u.revision, "
                 "custom_data = u.custom_data, status = u.status, source = 'import', last_import_batch_id = :b, "
                 "image_asset_id = coalesce(u.image_asset_id, p.image_asset_id), "
+                "preferred_label_type_id = coalesce(u.preferred_label_type_id, p.preferred_label_type_id), "
                 "updated_by = :u FROM import_update u WHERE p.id = u.id"), {"b": batch.id, "u": user.id})
         if missing:
             await db.execute(update(Part).where(Part.id.in_(missing), Part.status == "active")

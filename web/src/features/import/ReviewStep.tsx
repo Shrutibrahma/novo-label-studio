@@ -183,6 +183,9 @@ export function ReviewStep({ batch, onBack, onDiscarded, onCommitted, onChanged 
                   </div>
                 </Td>
                 <Td>
+                  {r.action !== "invalid" && (r.errors ?? []).length > 0 && (
+                    <span className="t-small text-warning">{(r.errors ?? []).map((e) => e.msg).join(" ")}</span>
+                  )}
                   {r.action === "invalid" && (
                     <div className="flex items-start justify-between gap-3">
                       <span className="t-small text-danger">{(r.errors ?? []).map((e) => e.msg).join(" ")}</span>

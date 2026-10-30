@@ -22,6 +22,7 @@ from app.parts.values import (
 
 
 IMAGE = "image"  # mapping target for pictures placed in cells (see mapping.IMAGE_TARGET)
+LABEL_TYPE = "label_type"  # mapping target for the preferred label type (see mapping.LABEL_TYPE_TARGET)
 NO_PICTURE = "This cell has no picture. Place the picture in the cell in Excel (.xlsx)."
 BAD_PICTURE = "The picture in this cell can't be read. Use a PNG, JPEG or WebP picture."
 
@@ -56,6 +57,7 @@ class Context:
     targets: list[str]  # mapped targets, core and custom
     parts: dict[str, ExistingPart]  # by part_number_norm
     alias_owner: dict[str, str]  # upper(btrim(alias)) -> part number of the part that owns it
+    label_types: dict[str, str] = field(default_factory=dict)  # lower(btrim(name)) -> name, active types only
 
 
 @dataclass
@@ -74,6 +76,8 @@ class CleanRow:
     source_row: int
     data: dict[str, Any]
     errors: list[dict[str, str]] = field(default_factory=list)
+    # Shown on the row without making it invalid: {"field", "msg", "level": "warning"}.
+    warnings: list[dict[str, str]] = field(default_factory=list)
 
     @property
     def number_norm(self) -> str | None:
@@ -92,9 +96,19 @@ def clean(source_row: int, raw: dict[str, Any], ctx: Context) -> CleanRow:
     never clear an existing value), except that part_number / part_name presence is checked later."""
     data: dict[str, Any] = {}
     errors: list[dict[str, str]] = []
+    warnings: list[dict[str, str]] = []
     for target in ctx.targets:
         value = raw.get(target)
         if is_blank(value):
+            continue  # an empty label type never clears the part's preferred type (D9)
+        if target == LABEL_TYPE:
+            name = raw_to_text(value).strip()
+            match = ctx.label_types.get(name.lower())
+            if match is not None:
+                data[LABEL_TYPE] = match
+            else:
+                warnings.append({"field": LABEL_TYPE, "level": "warning",
+                                 "msg": f'Unknown label type "{name}"; the part keeps its current type.'})
             continue
         if target == IMAGE:
             # A stored picture (validation) or the asset id already staged (re-check after a row edit). An
@@ -124,7 +138,7 @@ def clean(source_row: int, raw: dict[str, Any], ctx: Context) -> CleanRow:
                 data[target] = raw_to_text(value)
     if "part_number" not in data:
         errors.insert(0, {"field": "part_number", "msg": "Part number is missing."})
-    return CleanRow(source_row=source_row, data=data, errors=errors)
+    return CleanRow(source_row=source_row, data=data, errors=errors, warnings=warnings)
 
 
 def duplicate_rows(rows: list[CleanRow]) -> dict[str, list[int]]:
@@ -156,9 +170,11 @@ def classify(row: CleanRow, ctx: Context, dups: dict[str, list[int]]) -> RowResu
             errors.append({"field": "part_number", "msg": "This part number is already used as a label name "
                                                           f"for part {ctx.alias_owner[norm]}."})
     if errors:
-        return RowResult(row.source_row, "invalid", existing.id if existing else None, row.data, None, errors, False)
+        return RowResult(row.source_row, "invalid", existing.id if existing else None, row.data, None,
+                         errors + row.warnings, False)
+    notes = row.warnings or None
     if existing is None:
-        return RowResult(row.source_row, "new", None, row.data, None, None, True)
+        return RowResult(row.source_row, "new", None, row.data, None, notes, True)
 
     diff: dict[str, list[Any]] = {}
     for key, value in row.data.items():
@@ -169,12 +185,12 @@ def classify(row: CleanRow, ctx: Context, dups: dict[str, list[int]]) -> RowResu
     if existing.status == "archived":
         # Matches an archived part: an update flagged "Restore archived part", not accepted by default.
         diff["status"] = ["archived", "active"]
-        return RowResult(row.source_row, "update", existing.id, row.data, diff, None, False)
+        return RowResult(row.source_row, "update", existing.id, row.data, diff, notes, False)
     if existing.status == "inactive":
         diff["status"] = ["inactive", "active"]
     if not diff:
-        return RowResult(row.source_row, "unchanged", existing.id, row.data, None, None, True)
-    return RowResult(row.source_row, "update", existing.id, row.data, diff, None, True)
+        return RowResult(row.source_row, "unchanged", existing.id, row.data, None, notes, True)
+    return RowResult(row.source_row, "update", existing.id, row.data, diff, notes, True)
 
 
 def missing_rows(ctx: Context, seen_numbers: set[str]) -> list[RowResult]:

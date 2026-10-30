@@ -367,3 +367,22 @@ Decisions for `SPEC.md` v1.1 (addendum of 2026-10-30) that the addendum left ope
      so they are unchanged and now cover reprints of pre-v1.1 labels. New goldens: `house_goldens.json`
      (4 sizes × band on/off × footer on/off × qr_side and the bin-template grid = 32). The bin-template grid on
      Small (2 × 1 in) doesn't fit with or without the house style — that template is too dense for Small.
+111. **"Most recent print" for type resolution** = the newest non-reprint `printed_label` of the part (created_at,
+     then id), via its config's `label_type_id`. If that type is archived it is skipped like an archived preferred
+     type, and resolution falls through to "Print as", then the first type. One SQL query resolves a whole page
+     (`app/configs/resolve.py`).
+112. **Parts list size and version follow the resolved type.** Each row's size, design version and "has override"
+     now come from the part's resolved type. (The earlier list query joined every type's current default, so
+     with two or more types a part could appear once per type — fixed here.)
+113. **Saving the type from the Print dialog.** `POST /print` items take `set_preferred` (true = save this type,
+     false = clear the saved type); any item with it from an Operator is refused (`FORBIDDEN`). Audited as
+     `part.update` with the preferred type before/after. A preferred type can't be set to an archived type
+     (`NOT_FOUND`), but a type archived later stays stored and is skipped.
+114. **Batch with different sizes.** Groups whose size doesn't fit the loaded roll are shown greyed with "Load
+     {size} labels to print these" and left out of the print; the rest print. With one size, the existing "I've
+     loaded … labels" confirmation is unchanged. "Use this type" re-resolves every part to the chosen type.
+115. **Import "Label type" column.** Matched to active types by name (case-insensitive, trimmed); the row data holds
+     the type's name, so the review diff reads "label_type: Bin → Rack". An unknown name is stored as a row note
+     `{"field": "label_type", "level": "warning", ...}` in `import_row.errors` (the row stays new/update and
+     accepted; the review shows it in amber). Header synonyms: "label type", "labeltype", "print as".
+116. **Part drawer "Label type"** saves as soon as it's changed (it isn't part of the details form's Save).

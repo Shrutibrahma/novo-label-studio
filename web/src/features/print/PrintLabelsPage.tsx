@@ -11,7 +11,8 @@ import { FreshnessBadge, PartThumb, SearchInput } from "../../components/PartBit
 import { SkeletonRows, Table, Td, Th, Tr } from "../../components/Table";
 import { ApiError, SERVER_UNREACHABLE } from "../../lib/api";
 import { sizeText } from "../../lib/format";
-import { useDebounced, type PartListItem } from "../../lib/parts";
+import { useDebounced, type LabelTypeRef, type PartListItem } from "../../lib/parts";
+import { Tooltip } from "../../components/Tooltip";
 import { usePartsQuery, useSentinel, type PartsParams } from "../parts/usePartsQuery";
 import { PrintLaunchHost, PrintRowActions, type PrintLaunch } from "./PrintLaunch";
 
@@ -43,8 +44,9 @@ export function PrintLabelsPage() {
   const debouncedQ = useDebounced(q.trim(), 200);
   const [selected, setSelected] = useState<Map<string, PartListItem>>(new Map());
   const [launch, setLaunch] = useState<PrintLaunch | null>(null);
+  const printAs = useCurrentLabelType()?.id;
 
-  const params = useMemo<PartsParams>(() => ({ q: debouncedQ || undefined, status: "active", ...chipParams(chip) }), [debouncedQ, chip]);
+  const params = useMemo<PartsParams>(() => ({ q: debouncedQ || undefined, status: "active", print_as: printAs, ...chipParams(chip) }), [debouncedQ, chip, printAs]);
   const query = usePartsQuery(params);
   const rows = query.data?.pages.flatMap((p) => p.items) ?? [];
   // No part has a picture yet: an Image column of empty placeholders only adds noise.
@@ -164,7 +166,12 @@ export function PrintLabelsPage() {
                     <Td className="whitespace-nowrap">
                       <Mono className="text-text">{p.part_number}</Mono>
                     </Td>
-                    <Td className="whitespace-nowrap">{sizeText(p.size)}</Td>
+                    <Td className="whitespace-nowrap">
+                      <span className="inline-flex items-center gap-2">
+                        {p.label_type && <TypeChip type={p.label_type} />}
+                        {sizeText(p.size)}
+                      </span>
+                    </Td>
                     <Td>
                       <FreshnessBadge state={p.label_state} />
                     </Td>
@@ -199,7 +206,25 @@ export function PrintLabelsPage() {
   );
 }
 
-/** "Print as": which saved label type the Print buttons use (remembered on this computer). */
+const TYPE_TIP: Record<LabelTypeRef["reason"], (name: string) => string> = {
+  preferred: (name) => `Always prints as ${name}`,
+  last_printed: (name) => `Last printed as ${name}`,
+  print_as: () => "Uses Print as",
+  first: () => "Uses Print as",
+};
+
+/** The label type a part prints as (resolved by the server), with why. */
+function TypeChip({ type }: { type: LabelTypeRef }) {
+  return (
+    <Tooltip content={TYPE_TIP[type.reason](type.name)}>
+      <span className={`inline-flex h-6 items-center rounded-full px-2.5 t-caption ${type.reason === "preferred" ? "bg-primary-subtle text-primary" : "bg-neutral-bg text-text-secondary"}`}>
+        {type.name}
+      </span>
+    </Tooltip>
+  );
+}
+
+/** "Print as": the label type for parts that have no saved or last-printed type (remembered on this computer). */
 function LabelTypePicker() {
   const types = useLabelTypes();
   const current = useCurrentLabelType();
@@ -207,7 +232,7 @@ function LabelTypePicker() {
   if (list.length < 2) return null;
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
-      <span className="t-body-strong text-text">Print as</span>
+      <span className="t-body-strong text-text">Print as (for parts without a saved type)</span>
       <div role="radiogroup" aria-label="Label type" className="flex flex-wrap gap-1.5">
         {list.map((t) => {
           const on = t.id === current?.id;

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import audit
 from app.auth.deps import DB, AnyUser
 from app.configs.effective import effective_config
+from app.configs.resolve import resolve_label_type
 from app.configs.spec import LabelSpec, ManualBox, parse_spec
 from app.errors import ApiError
 from app.models import LabelConfig, LabelGroup, LabelSize, Part, Printer, PrintedLabel, PrintJob, PrintRequest
@@ -59,11 +60,15 @@ class ItemIn(BaseModel):
     quantity: int = Field(default=1, ge=1, le=200)
     manual_values: dict[str, Any] = Field(default_factory=dict)
     group: GroupIn | None = None
+    # v1.1 D11 amended: the type to print as; omitted = the part's resolved type. A request may mix types.
+    label_type_id: uuid.UUID | None = None
+    # Admin only: true saves label_type_id (or the resolved type) as the part's preferred type, false clears it.
+    set_preferred: bool | None = None
 
 
 class PrintIn(BaseModel):
     printer_id: uuid.UUID | None = None
-    label_type_id: uuid.UUID | None = None  # the first label type when omitted
+    label_type_id: uuid.UUID | None = None  # the browser's "Print as" choice, for parts without a saved type
     items: list[ItemIn] = Field(min_length=1, max_length=200)
     # "I've loaded {size} labels" (12.6 step 6): confirms the loaded size and records it on the printer.
     loaded_size_confirmed: bool = False
@@ -116,7 +121,8 @@ async def plan_items(db: AsyncSession, body: PrintIn, labels_for: dict[str, str]
         part = await db.get(Part, item.part_id)
         if part is None or part.status != "active":
             raise ApiError("NOT_FOUND")
-        cfg = await effective_config(db, part.id, body.label_type_id)
+        type_id = item.label_type_id or (await resolve_label_type(db, part.id, body.label_type_id))[0].id
+        cfg = await effective_config(db, part.id, type_id)
         spec = parse_spec(cfg.spec)
         size = await db.get(LabelSize, cfg.label_size_id)
         assert size is not None
@@ -196,6 +202,8 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
         raise ApiError("NOT_FOUND")
     await assert_printer_ready(db, printer)
 
+    if any(i.set_preferred is not None for i in body.items) and not user.is_admin:
+        raise ApiError("FORBIDDEN")
     ctx = await render_context(db, printer)
     planned = await plan_items(db, body, ctx.custom_labels)
     await check_loaded_size(db, printer, planned, body.loaded_size_confirmed, user.id)
@@ -278,10 +286,23 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
                                 group_index=index if p.group else None, copies=p.item.copies, snapshot=snap,
                                 qr_payload=result.qr_payload, dpi=printer.dpi, bitmap_png=result.png,
                                 bitmap_sha256=sha256(result.png)))
+    for p in planned:
+        if p.item.set_preferred is not None:
+            await remember_type(db, user.id, p.part, p.config.label_type_id if p.item.set_preferred else None)
     req.request_body = body.model_dump(mode="json") | {"group_ids": group_ids}
     await db.commit()
     await queue_jobs(db, job_ids)
     return await request_out(db, req)
+
+
+async def remember_type(db: AsyncSession, user_id: uuid.UUID, part: Part, type_id: uuid.UUID | None) -> None:
+    """"Always print {part} as {Type}" (checked: save it; unchecked on the preferred type: clear it)."""
+    if part.preferred_label_type_id == type_id:
+        return
+    audit(db, user_id, "part.update", "part", part.id, {"preferred_label_type_id": part.preferred_label_type_id},
+          {"preferred_label_type_id": type_id})
+    part.preferred_label_type_id = type_id
+    part.updated_by = user_id
 
 
 async def resolve_group(db: AsyncSession, p: Planned, box: ManualBox, user_id: uuid.UUID) -> LabelGroup:

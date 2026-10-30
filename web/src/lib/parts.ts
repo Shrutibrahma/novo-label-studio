@@ -11,6 +11,13 @@ export interface SizeBrief {
   height_in: number;
 }
 
+/** The label type a part prints as, and why (v1.1 D11 amended; resolved by the server). */
+export interface LabelTypeRef {
+  id: string;
+  name: string;
+  reason: "preferred" | "last_printed" | "print_as" | "first";
+}
+
 export interface PartListItem {
   id: string;
   part_number: string;
@@ -28,6 +35,7 @@ export interface PartListItem {
   has_override: boolean;
   updated_at: string;
   score: number | null;
+  label_type: LabelTypeRef | null;
 }
 
 export interface PartList {
@@ -70,6 +78,9 @@ export interface PartDetail {
   image_version: string | null;
   aliases: Alias[];
   config: ConfigBrief;
+  label_type: LabelTypeRef;
+  /** "Always print as" (Admin); null = not set. */
+  preferred_label_type_id: string | null;
   has_override: boolean;
   label_state: LabelState;
   last_printed_at: string | null;

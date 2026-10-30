@@ -28,6 +28,8 @@ export interface PreviewRequest {
   part_id: string;
   config_id?: string;
   label_type_id?: string;
+  /** The browser's "Print as" choice, used when label_type_id is omitted (the server resolves the type). */
+  print_as?: string;
   config?: { label_size_id: string; spec: unknown; qr_mode: string; serial_mode: string };
   manual_values?: Record<string, unknown>;
   /** An unsaved Settings → Label style draft (Admin only). */

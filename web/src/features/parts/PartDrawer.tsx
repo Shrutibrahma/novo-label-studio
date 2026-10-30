@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useIsAdmin } from "../../app/auth";
 import { Button } from "../../components/Button";
 import { Banner, Mono, PrimaryBadge, Skeleton } from "../../components/Display";
-import { Checkbox, Field, Input, Textarea } from "../../components/Form";
+import { Checkbox, Field, Input, Select, Textarea } from "../../components/Form";
 import { Menu, Tabs } from "../../components/Menu";
 import { ConfirmDialog, Dialog, Drawer } from "../../components/Overlay";
 import { FreshnessBadge, PartStatusBadge, PartThumb } from "../../components/PartBits";
 import { useToast } from "../../components/Toast";
 import { api, ApiError } from "../../lib/api";
+import { useLabelTypes } from "../../lib/labelTypes";
 import { qk } from "../../lib/queries";
 import { useCustomFields, usePart, type Alias, type PartDetail } from "../../lib/parts";
 import { CustomFieldInput, customValue } from "./CustomFieldInput";
@@ -112,6 +113,28 @@ function DrawerHeader({ part }: { part: PartDetail }) {
   );
 }
 
+/** "Label type": the type this part always prints as (saved at once), or not set (uses the last printed type). */
+function PreferredTypeField({ part, onSaved }: { part: PartDetail; onSaved: () => void }) {
+  const types = useLabelTypes();
+  const toast = useToast();
+  const save = useMutation({
+    mutationFn: (id: string | null) => api<PartDetail>(`/parts/${part.id}`, { method: "PATCH", body: { preferred_label_type_id: id }, headers: { "If-Match": part.updated_at } }),
+    onSuccess: onSaved,
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : String(e)),
+  });
+  return (
+    <Field label="Label type" htmlFor="pd-type">
+      <Select
+        id="pd-type"
+        value={part.preferred_label_type_id ?? ""}
+        disabled={save.isPending}
+        options={[{ value: "", label: "Not set (use last printed)" }, ...(types.data ?? []).map((t) => ({ value: t.id, label: t.name }))]}
+        onChange={(e) => save.mutate(e.target.value || null)}
+      />
+    </Field>
+  );
+}
+
 function DetailsTab({ part, onArchived }: { part: PartDetail; onArchived: () => void }) {
   const isAdmin = useIsAdmin();
   const fields = useCustomFields();
@@ -184,6 +207,7 @@ function DetailsTab({ part, onArchived }: { part: PartDetail; onArchived: () => 
         <Field label="Revision" htmlFor="pd-rev" error={errors.revision}>
           <Input id="pd-rev" readOnly={readOnly} value={form.revision} error={errors.revision} onChange={set("revision")} />
         </Field>
+        {isAdmin && <PreferredTypeField part={part} onSaved={invalidate} />}
         {(fields.data ?? []).map((f) => (
           <CustomFieldInput
             key={f.key}

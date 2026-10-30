@@ -34,9 +34,9 @@ from app.imports.engine import (
     missing_rows,
     raw_to_text,
 )
-from app.imports.mapping import IMAGE_TARGET, signature, suggest
+from app.imports.mapping import IMAGE_TARGET, LABEL_TYPE_TARGET, signature, suggest
 from app.imports.parse import CellImage, ParseError, Sheet, file_kind, read_file
-from app.models import CustomFieldDef, ImportBatch, ImportMapping, ImportRow, Part, PartAlias
+from app.models import CustomFieldDef, ImportBatch, ImportMapping, ImportRow, LabelType, Part, PartAlias
 from app.parts.images import PictureError, png_from_picture, store_png
 from app.parts.values import FieldDef
 
@@ -189,7 +189,7 @@ async def suggested_mapping(db: AsyncSession, headers: list[str], pictures: froz
              ).scalar_one_or_none()
     defs = await custom_defs(db)
     if saved is not None:
-        valid = set(defs) | {"part_number", "part_name", "description", "revision", IMAGE_TARGET}
+        valid = set(defs) | {"part_number", "part_name", "description", "revision", IMAGE_TARGET, LABEL_TYPE_TARGET}
         mapping = {h: (saved.mapping.get(h) if saved.mapping.get(h) in valid else None) for h in headers}
         name: str | None = saved.name
     else:
@@ -205,8 +205,10 @@ async def suggested_mapping(db: AsyncSession, headers: list[str], pictures: froz
 async def load_context(db: AsyncSession, targets: list[str]) -> Context:
     defs = await custom_defs(db)
     parts: dict[str, ExistingPart] = {}
+    types = {t.id: t.name for t in (await db.execute(select(LabelType).where(LabelType.archived.is_(False)))).scalars()}
     rows = await db.execute(select(Part.id, Part.part_number, Part.part_number_norm, Part.part_name, Part.description,
-                                   Part.revision, Part.custom_data, Part.status, Part.image_asset_id))
+                                   Part.revision, Part.custom_data, Part.status, Part.image_asset_id,
+                                   Part.preferred_label_type_id))
     for r in rows:
         values: dict[str, Any] = dict(r.custom_data or {})
         values["part_number"] = r.part_number
@@ -217,11 +219,14 @@ async def load_context(db: AsyncSession, targets: list[str]) -> Context:
             values["revision"] = r.revision
         if r.image_asset_id is not None:
             values[IMAGE_TARGET] = str(r.image_asset_id)
+        if r.preferred_label_type_id in types:
+            values[LABEL_TYPE_TARGET] = types[r.preferred_label_type_id]
         parts[r.part_number_norm] = ExistingPart(id=r.id, part_number=r.part_number, status=r.status, values=values)
     owners = await db.execute(select(func.upper(func.btrim(PartAlias.alias)), Part.part_number)
                               .join(Part, Part.id == PartAlias.part_id))
     alias_owner = {a: pn for a, pn in owners}
-    return Context(defs=defs, targets=targets, parts=parts, alias_owner=alias_owner)
+    return Context(defs=defs, targets=targets, parts=parts, alias_owner=alias_owner,
+                   label_types={name.strip().lower(): name for name in types.values()})
 
 
 def raw_rows(sheet: Sheet, mapping: dict[str, str | None]) -> list[tuple[int, dict[str, Any]]]:

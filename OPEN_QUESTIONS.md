@@ -416,3 +416,19 @@ Decisions for `SPEC.md` v1.1 (addendum of 2026-10-30) that the addendum left ope
 124. **Migration 0007 down** only works while no quick label has been printed (part_id must be NOT NULL again).
 125. **Label style family preview** of a quick type fills its print-time fields with their own names (e.g. a
      Station box shows "Station"), as 4.5 asks.
+126. **Backup copy mechanics.** `BACKUP_COPY_TO` (host folder) is mounted into the backup container at
+     `/backup-copy`; when it isn't set a placeholder folder (`deploy/backup-copy-off/`, ignored by git) is mounted
+     and copying is off. Files are copied as `.partial` then renamed; the copy folder keeps 30 days like the local
+     one. The backup container writes `backups/last-backup.json` (`at`, `copied`, `copy_error`); the API mounts
+     `backups/` read-only to show it in Settings → General. With no copy folder set up the line reads "Copied off
+     this machine: No — no copy folder is set up (BACKUP_COPY_TO)".
+127. **Allowed IP ranges.** `deploy/caddy-start.sh` turns `ALLOWED_CIDRS` (comma-separated) into the Caddyfile's
+     `remote_ip` list; empty = `0.0.0.0/0 ::/0` plus a WARNING line in Caddy's log. Only the internet-facing server
+     mode uses Caddy; on the plant network nothing changes.
+128. **Operations tests** run in `scripts/test-ops.ps1` (called by `test.ps1`) with throwaway containers: a real
+     `pg_dump` backup copied to a writable folder, then to a read-only one; Caddy with an allow-list that excludes
+     the test client (403) and with an empty one (passes on, 502 with no upstream, and logs the warning).
+129. **Agent as a service (U5 item 4)** needs the real laptop and a reboot: listed in `HARDWARE.md` as not run.
+130. **`Invoke-Compose` fix.** Windows PowerShell 5.1 turned Docker's progress output on stderr into a terminating
+     error, so `up.ps1` could stop after "api Built"; it now runs docker with errors not treated as fatal and
+     checks the exit code only.

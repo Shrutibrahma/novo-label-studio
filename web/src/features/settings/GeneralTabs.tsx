@@ -7,7 +7,8 @@ import { Field, Input, Select } from "../../components/Form";
 import { useToast } from "../../components/Toast";
 import { api, ApiError } from "../../lib/api";
 import { qk, useSettings } from "../../lib/queries";
-import type { AppSettings } from "../../lib/types";
+import { formatDateTime } from "../../lib/format";
+import type { AppSettings, BackupStatus } from "../../lib/types";
 
 function useSaveSettings(onFieldErrors: (f: Record<string, string>) => void) {
   const qc = useQueryClient();
@@ -52,7 +53,24 @@ export function GeneralTab() {
       </form>
     </Card>
     <SidebarPreview name={name} />
+    {settings.data && <BackupLine backup={settings.data.backup} />}
     </div>
+  );
+}
+
+/** Read-only: the last backup and whether it was copied off this machine (v1.1 D25). */
+function BackupLine({ backup }: { backup: BackupStatus }) {
+  const copied = !backup.copy_enabled
+    ? "No — no copy folder is set up (BACKUP_COPY_TO)"
+    : backup.copied
+      ? "Yes"
+      : backup.copied === false
+        ? `No — ${backup.copy_error ?? "the copy failed"}`
+        : "Not yet";
+  return (
+    <p className="w-full t-small text-text-secondary">
+      Last backup: {backup.at ? formatDateTime(backup.at) : "none yet"} · Copied off this machine: {copied}
+    </p>
   );
 }
 

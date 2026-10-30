@@ -71,6 +71,20 @@ Settings live in `deploy/.env` (created by `up.ps1`): `DB_PASSWORD`, `HTTPS_PORT
 To reach it from other machines by name, add `EXTRA_SAN=DNS:labels.local` (or `IP:…`) before the first start,
 or delete `deploy/certs/` to regenerate the certificate.
 
+## Labels in v1.1
+
+- **Label style** (Settings → Label style, Admin): one font, frame, black title band (type title + company name)
+  and footer (serial + print date) for every label type, with a live preview of every type side by side.
+  Labels under 1.5 in tall get the frame only. A type's band title is "Title on label" in Configure → Rename.
+- **Remembered types**: a part prints as its saved type ("Always print … as …" in the Print dialog, or the
+  Part drawer's "Label type"), else the type it was last printed as, else "Print as". The chip on each Print
+  Labels row says which. An import can set it with a "Label type" column.
+- **Industrial presets**: Configure → New type → Start from: Part label, Bin label, Kanban card, Rack location,
+  Quality tag, Box label (part labels) or Workstation sign (quick label). Boxes can be white on black, and a
+  box can be an arrow.
+- **Quick labels**: types of kind "Quick label (no part)" — QC HOLD tags, workstation signs — printed from
+  Print Labels → **Quick label**, listed in History as "Quick label · {type}" and reprinted like any label.
+
 ## Tests
 
 `.\scripts\test.ps1` runs, in order:
@@ -81,8 +95,11 @@ or delete `deploy/certs/` to regenerate the certificate.
    allocation, A3, history/reprint (A4), role guards (A10).
 2. **Agent** — pytest: ZPL decoder, simulated printer, job loop, status mapping, `~HS` parsing.
 3. **Web** — TypeScript check + production build.
-4. **End-to-end** — Playwright flows 13.1–13.10 against an isolated stack on https://localhost:9443 with the
+4. **End-to-end** — Playwright flows 13.1–13.13 against an isolated stack on https://localhost:9443 with the
    real agent in simulated mode (it never touches your dev data).
+5. **Operations** (`scripts\test-ops.ps1`) — the backup copy off this machine (success, and an unwritable
+   folder: the local backup stays, the error is recorded) and the Caddy allow-list (`ALLOWED_CIDRS`: other
+   addresses get 403), with throwaway containers.
 
 Acceptance checks that need the printer are in the suite as skipped tests with the reason "needs hardware".
 Performance targets (section 15) are a separate, slower run:
@@ -103,8 +120,11 @@ Last run on this development laptop (Windows 11, Docker Desktop), 50,000 parts:
 (`search_parts` meets its target through migration 0002 — see OPEN_QUESTIONS.md #75. For information, a whole
 `GET /parts?q=` request including label freshness is ~180 ms p95.)
 
-Renderer goldens are committed in `api/tests/goldens/`. After a deliberate renderer change, look at the PNGs
-and regenerate:  `cd api; $env:UPDATE_GOLDENS = "1"; uv run pytest tests/test_render.py`.
+Renderer goldens are committed in `api/tests/goldens/`: `render_goldens.json` (v1 layouts, labels without a house
+style), `house_goldens.json` (house style: 4 sizes × band × footer × 2 layouts) and `preset_goldens.json` (the seven
+presets). After a deliberate renderer change, look at the PNGs and regenerate:
+`cd api; $env:UPDATE_GOLDENS = "1"; uv run pytest tests/test_render.py tests/test_house_style.py tests/test_presets.py`.
+`tests/test_uniformity.py` checks every preset has the same frame (4 dots), band (34) and footer rule (2).
 
 ## When the ZQ630 Plus arrives: switch the agent to USB
 
@@ -143,6 +163,29 @@ The `backup` service runs every night at `BACKUP_AT` (default 02:00 UTC — set 
 `America/Chicago`): `pg_dump` custom format + a tar of the part images into `backups\`, kept 30 days.
 To restore on a fresh machine: copy the repository and the `backups\` folder, run `.\scripts\up.ps1` once, then
 `.\scripts\restore.ps1` (newest backup) and sign in with the users from the backup.
+
+**A copy off this machine.** A backup on the same disk dies with the disk. Set `BACKUP_COPY_TO` in `deploy\.env`
+to a folder on another device — a network share, a NAS, or a OneDrive folder that syncs — and run
+`.\scripts\up.ps1`. After each backup the dump and the images are copied there too (same 30 days). If the copy
+fails, the local backup stays and the error is logged. Settings → General shows "Last backup: … · Copied off
+this machine: Yes / No — {error}". Restore from that folder with `.\scripts\restore.ps1 -From <folder>`.
+
+**Test a restore once a month on a spare PC:**
+1. On the spare PC: install Docker Desktop and uv, copy (or `git clone`) this repository, run `.\scripts\up.ps1`.
+2. `.\scripts\restore.ps1 -From <the BACKUP_COPY_TO folder>` and type `RESTORE`.
+3. Open https://localhost:8443, sign in with a real account, open a few parts, preview a label, and open History:
+   the newest print should be from the night before the backup.
+4. `.\scripts\down.ps1` on the spare PC. Note the date and result in your maintenance log.
+
+## Where to run it
+
+Run it on the plant network — this laptop or a small server — and reach it by name from other PCs: add
+`EXTRA_SAN=DNS:labels.local` (or `IP:192.168.x.y`) to `deploy\.env` before the first start, or delete
+`deploy\certs\` to regenerate the certificate. Nothing needs to be reachable from the internet.
+
+If it must be on the internet (the Oracle Cloud setup in `deploy/ORACLE.md`), set `ALLOWED_CIDRS` in
+`deploy/.env` to the plant's public address range(s), comma-separated (e.g. `203.0.113.0/24, 198.51.100.7/32`):
+every other address gets 403. Left empty, it answers everyone and logs a warning at start.
 
 ## Repository layout
 

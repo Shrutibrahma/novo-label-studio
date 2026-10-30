@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter
@@ -10,6 +12,7 @@ from sqlalchemy import exists, select
 
 from app.audit import audit
 from app.auth.deps import DB, Admin, AnyUser
+from app.config import get_settings
 from app.configs.defaults import ALL_FONTS, SETTING_COMPANY, SETTING_FONTS, SETTING_HOUSE_STYLE
 from app.errors import ApiError, field_error
 from app.models import AppSetting, IssuedSerial, SerialSequence
@@ -29,10 +32,20 @@ class SerialSettings(BaseModel):
     example: str
 
 
+class BackupStatus(BaseModel):
+    """The last nightly (or manual) backup, from the backup container's status file (v1.1 D25)."""
+
+    at: datetime | None
+    copy_enabled: bool
+    copied: bool | None  # None: no copy folder set up when that backup ran
+    copy_error: str | None
+
+
 class SettingsOut(BaseModel):
     company_name: str
     serial: SerialSettings
     fonts_allowed: list[str]
+    backup: BackupStatus
 
 
 class SettingsPatch(BaseModel):
@@ -74,7 +87,21 @@ async def settings_out(db: DB) -> SettingsOut:
                               digits=seq.digits, next_value=seq.next_value, locked=await serial_locked(db, seq),
                               example=format_serial(seq.prefix, seq.separator, seq.digits, seq.next_value)),
         fonts_allowed=list(await get_setting(db, SETTING_FONTS, ALL_FONTS)),
+        backup=backup_status(),
     )
+
+
+def backup_status() -> BackupStatus:
+    settings = get_settings()
+    try:
+        raw = json.loads(settings.backup_status_file.read_text(encoding="utf-8"))
+        at = datetime.fromisoformat(str(raw["at"]).replace("Z", "+00:00"))
+        copied = raw.get("copied")
+        error = str(raw.get("copy_error") or "") or None
+    except (OSError, ValueError, KeyError, TypeError):
+        at, copied, error = None, None, None
+    return BackupStatus(at=at, copy_enabled=bool(settings.backup_copy_enabled.strip()),
+                        copied=copied if isinstance(copied, bool) else None, copy_error=error)
 
 
 @router.get("", response_model=SettingsOut)

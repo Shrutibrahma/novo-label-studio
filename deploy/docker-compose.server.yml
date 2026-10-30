@@ -10,11 +10,14 @@ services:
     restart: unless-stopped
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:?run scripts/server.sh up to set SITE_DOMAIN in deploy/.env}
+      ALLOWED_CIDRS: ${ALLOWED_CIDRS:-}
+    entrypoint: ["sh", "/caddy-start.sh"]
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-start.sh:/caddy-start.sh:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

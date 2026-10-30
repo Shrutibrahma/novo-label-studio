@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     asset_dir: Path = Path("/data/assets")
     session_ttl_hours: int = 12
     public_base_url: str = "https://localhost:8443"
+    # v1.1 D25: written by the backup container after each backup (deploy/backup.sh).
+    backup_status_file: Path = Path("/backups/last-backup.json")
+    # "yes" when deploy/.env sets BACKUP_COPY_TO; Compose passes an empty string otherwise.
+    backup_copy_enabled: str = ""
     font_dir: Path = API_DIR / "fonts"
     # Background loops (lease check, import expiry, session cleanup). Tests switch them off.
     run_scheduler: bool = True

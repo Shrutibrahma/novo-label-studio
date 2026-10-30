@@ -70,6 +70,15 @@ export interface AppSettings {
   company_name: string;
   serial: SerialSettings;
   fonts_allowed: string[];
+  backup: BackupStatus;
+}
+
+/** The last backup and its copy off this machine (v1.1 D25). */
+export interface BackupStatus {
+  at: string | null;
+  copy_enabled: boolean;
+  copied: boolean | null;
+  copy_error: string | null;
 }
 
 /** Settings → Label style (v1.1 D21): one look for every label. */

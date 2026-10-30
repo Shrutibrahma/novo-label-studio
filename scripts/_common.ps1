@@ -64,7 +64,12 @@ function Initialize-EnvFile {
 
 function Invoke-Compose {
     # A simple function (no param block) so arguments like -d reach docker instead of PowerShell's -Debug.
-    & docker compose --project-directory $DeployDir -f $ComposeFile @args
+    # Docker writes progress to stderr; with 'Stop', Windows PowerShell would treat that as an error.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & docker compose --project-directory $DeployDir -f $ComposeFile @args 2>&1 | ForEach-Object { "$_" } | Out-Host
+    } finally { $ErrorActionPreference = $prev }
     if ($LASTEXITCODE -ne 0) { Fail "docker compose $($args -join ' ') failed." }
 }
 

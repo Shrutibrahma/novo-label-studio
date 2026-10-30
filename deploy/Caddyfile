@@ -1,7 +1,12 @@
 # Server mode only (docker-compose.server.yml). Caddy obtains and renews the Let's Encrypt certificate for
 # SITE_DOMAIN and forwards everything to the web container (nginx), which keeps its own self-signed
 # certificate on the internal Docker network.
+# v1.1 D26: only the IP ranges in ALLOWED_CIDRS get an answer; every other address gets 403. CADDY_ALLOWED is
+# ALLOWED_CIDRS with spaces for commas, set by caddy-start.sh; empty means every address, with a warning in the log.
 {$SITE_DOMAIN} {
+	@denied not remote_ip {$CADDY_ALLOWED}
+	respond @denied "Forbidden" 403
+
 	reverse_proxy https://web:443 {
 		transport http {
 			tls_insecure_skip_verify

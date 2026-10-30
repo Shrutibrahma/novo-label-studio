@@ -82,7 +82,20 @@ minutes — and prints `https://<your address>` when it's healthy.
 Open that address → first-run setup: create the admin (use a strong password; the sign-in page is on the internet),
 company and serial settings. Step 3 shows the **agent token once** — copy it.
 
-## 7. Connect the print agent
+## 7. Only answer the plant (recommended)
+
+Find the plant's public IP address (search "what is my IP" from a PC there). Add it to `deploy/.env` on the
+server and restart:
+
+```bash
+echo "ALLOWED_CIDRS=203.0.113.7/32" >> deploy/.env
+bash scripts/server.sh up
+```
+
+Several ranges: comma-separated. Every other address gets 403. Empty means everyone, with a warning in
+`bash scripts/server.sh logs caddy`.
+
+## 8. Connect the print agent
 
 On the Windows PC with the printer, in the repository folder:
 

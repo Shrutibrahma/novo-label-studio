@@ -24,14 +24,15 @@ Decisions it left open: `OPEN_QUESTIONS.md` § v1.1 (#100–).
 | U2 Remember the type | done |
 | U3 Industrial presets + box options | done |
 | U4 Quick labels | done |
-| U5 Operations | not started |
+| U5 Operations | done (service-on-reboot acceptance needs the laptop: HARDWARE.md) |
 
 See `README.md` for setup, running, tests and switching the agent to USB, and the hardware checks still to run.
 Every decision the spec left open is in `OPEN_QUESTIONS.md` (#1–99). One approved schema change: migration 0002
 (faster `search_parts()`), see #75.
 
-Last full run of `scripts/test.ps1`: API 99 passed / 9 skipped (5 need hardware, 4 opt-in performance),
-agent 9 passed, web typecheck + build passed, Playwright 6/6 flows passed.
+Last full run of `scripts/test.ps1` (v1.1, 2026-10-30): operations checks passed (backup copy, allowed IPs);
+API 149 passed / 9 skipped (5 need hardware, 4 opt-in performance); agent 11 passed; web typecheck + build passed;
+Playwright 9/9 flows passed (13.1–13.13). v1.1 is not done until milestone H passes on the printer (HARDWARE.md).
 
 ## Environment notes (this laptop)
 - New shells may not see uv: `$env:Path = [Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:Path`.

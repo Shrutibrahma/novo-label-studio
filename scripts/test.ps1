@@ -51,6 +51,10 @@ function Run-Quiet {
     } finally { $ErrorActionPreference = $prev }
 }
 
+Invoke-Suite 'Operations (backup copy, allowed IPs)' {
+    return (Run powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'test-ops.ps1'))
+}
+
 Invoke-Suite 'API tests' {
     Push-Location (Join-Path $RepoRoot 'api')
     try {

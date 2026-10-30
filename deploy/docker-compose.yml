@@ -27,8 +27,11 @@ services:
       ASSET_DIR: /data/assets
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://localhost:8443}
+      BACKUP_STATUS_FILE: /backups/last-backup.json
+      BACKUP_COPY_ENABLED: ${BACKUP_COPY_TO:+yes}
     volumes:
       - assets:/data/assets
+      - ../backups:/backups:ro  # last-backup.json, shown in Settings -> General
     depends_on:
       db:
         condition: service_healthy
@@ -61,10 +64,13 @@ services:
       BACKUP_AT: ${BACKUP_AT:-02:00}
       BACKUP_KEEP_DAYS: "30"
       TZ: ${BACKUP_TZ:-UTC}
+      # v1.1 D25: a folder off this machine (network share, NAS, synced OneDrive) that gets a copy of each backup.
+      BACKUP_COPY_ENABLED: ${BACKUP_COPY_TO:+yes}
     volumes:
       - ./backup.sh:/backup.sh:ro
       - ../backups:/backups
       - assets:/data/assets
+      - ${BACKUP_COPY_TO:-./backup-copy-off}:/backup-copy
     depends_on:
       db:
         condition: service_healthy

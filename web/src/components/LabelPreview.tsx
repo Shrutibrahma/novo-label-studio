@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
+import type { HouseStyle } from "../lib/types";
 import { useDebounced } from "../lib/parts";
 import { Switch } from "./Form";
 
@@ -19,6 +20,8 @@ export interface PreviewResult {
   dpi: number;
   family: string;
   serial_placeholder: boolean;
+  /** Where the design's rows and boxes are drawn: x, y, w, h in dots (inside the house frame, band and footer). */
+  layout_box?: [number, number, number, number];
 }
 
 export interface PreviewRequest {
@@ -27,6 +30,8 @@ export interface PreviewRequest {
   label_type_id?: string;
   config?: { label_size_id: string; spec: unknown; qr_mode: string; serial_mode: string };
   manual_values?: Record<string, unknown>;
+  /** An unsaved Settings → Label style draft (Admin only). */
+  house_style?: HouseStyle;
 }
 
 /** POST /render/preview, debounced (250 ms after the last change in the Print dialog, 12.6). */

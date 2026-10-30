@@ -15,8 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.configs.spec import LabelSpec, parse_spec
 from app.errors import ApiError
-from app.models import Asset, CustomFieldDef, LabelSize, Part, PartAlias, Printer, SerialSequence
+from app.configs.defaults import SETTING_COMPANY
+from app.configs.effective import resolve_type
+from app.models import AppSetting, Asset, CustomFieldDef, LabelSize, LabelType, Part, PartAlias, Printer, SerialSequence
 from app.render.engine import RenderConfig, RenderPrinter, RenderResult, RenderSize, render
+from app.render.house import HouseStyle, snapshot_style
+from app.settings.router import house_style
 from app.render.snapshot import build_snapshot, clean_manual, field_labels, part_field_values
 
 
@@ -26,6 +30,8 @@ class RenderContext:
     custom_labels: dict[str, str]
     custom_keys: set[str]
     sequence: SerialSequence
+    house: HouseStyle
+    company: str
 
 
 @dataclass
@@ -36,6 +42,7 @@ class ConfigLike:
     spec: dict[str, Any]
     qr_mode: str
     serial_mode: str
+    label_type_id: uuid.UUID | None = None  # the first type when None
 
 
 async def render_context(db: AsyncSession, printer: Printer | None = None) -> RenderContext:
@@ -45,8 +52,23 @@ async def render_context(db: AsyncSession, printer: Printer | None = None) -> Re
             raise ApiError("NOT_FOUND")
     defs = (await db.execute(select(CustomFieldDef).where(CustomFieldDef.printable.is_(True)))).scalars().all()
     seq = (await db.execute(select(SerialSequence).where(SerialSequence.name == "Default"))).scalar_one()
+    company = await db.get(AppSetting, SETTING_COMPANY)
     return RenderContext(printer=printer, custom_labels={d.key: d.label for d in defs},
-                         custom_keys={d.key for d in defs}, sequence=seq)
+                         custom_keys={d.key for d in defs}, sequence=seq, house=await house_style(db),
+                         company=str(company.value) if company is not None else "")
+
+
+def house_snapshot(ctx: RenderContext, label_type: LabelType, spec: LabelSpec,
+                   style: HouseStyle | None = None) -> dict[str, Any]:
+    """generated.house_style for a label of `label_type`. The band shows the type's title (its name when not
+    set); a bin-layout design shows its own title there instead (v1.1 4.2)."""
+    title = spec.bin.title if spec.style.layout == "bin" else (label_type.title or label_type.name)
+    return snapshot_style(style or ctx.house, title.strip(), ctx.company)
+
+
+async def type_of(db: AsyncSession, type_id: uuid.UUID | None) -> LabelType:
+    t = await db.get(LabelType, type_id) if type_id is not None else None
+    return t if t is not None else await resolve_type(db, None)
 
 
 def preview_serial(seq: SerialSequence) -> str:
@@ -96,8 +118,9 @@ def render_snapshot(snapshot: dict[str, Any], spec: LabelSpec, qr_mode: str, siz
 
 
 async def render_part(db: AsyncSession, ctx: RenderContext, part: Part, cfg: ConfigLike,
-                      manual_values: dict[str, Any] | None, print_date: str, serial: str | None
-                      ) -> tuple[RenderResult, dict[str, Any], LabelSpec, LabelSize]:
+                      manual_values: dict[str, Any] | None, print_date: str, serial: str | None,
+                      house: HouseStyle | None = None) -> tuple[RenderResult, dict[str, Any], LabelSpec, LabelSize]:
+    """`house` replaces the saved house style (the Settings → Label style draft)."""
     spec = parse_spec(cfg.spec)
     size = await db.get(LabelSize, cfg.label_size_id)
     if size is None:
@@ -107,5 +130,5 @@ async def render_part(db: AsyncSession, ctx: RenderContext, part: Part, cfg: Con
     snapshot = build_snapshot(spec, cfg.qr_mode, part_values(part, await label_name_of(db, part.id),
                                                              await image_of(db, part)),
                               ctx.custom_keys, manual, serial if cfg.serial_mode == "required" else None, print_date,
-                              labels)
+                              labels, house_snapshot(ctx, await type_of(db, cfg.label_type_id), spec, house))
     return render_snapshot(snapshot, spec, cfg.qr_mode, size, ctx.printer, labels), snapshot, spec, size

@@ -204,6 +204,7 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
   onSaved: (t: LabelType) => void;
 }) {
   const [name, setName] = useState("");
+  const [title, setTitle] = useState("");
   const [copyFrom, setCopyFrom] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -212,6 +213,7 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
   if (key !== openedFor) {
     setOpenedFor(key);
     setName(mode === "rename" ? (current?.name ?? "") : "");
+    setTitle(mode === "rename" ? (current?.title ?? "") : "");
     setCopyFrom(current?.id ?? types[0]?.id ?? "");
     setError(null);
   }
@@ -221,12 +223,12 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
     try {
       const t =
         mode === "rename" && current
-          ? await api<LabelType>(`/label-types/${current.id}`, { method: "PATCH", body: { name } })
-          : await api<LabelType>("/label-types", { body: { name, copy_from_type_id: copyFrom || null } });
+          ? await api<LabelType>(`/label-types/${current.id}`, { method: "PATCH", body: { name, title: title.trim() || null } })
+          : await api<LabelType>("/label-types", { body: { name, title: title.trim() || null, copy_from_type_id: copyFrom || null } });
       if (mode === "new") setCurrentLabelType(t.id);
       onSaved(t);
     } catch (e) {
-      setError(e instanceof ApiError ? (e.fields.name ?? e.message) : String(e));
+      setError(e instanceof ApiError ? (e.fields.name ?? e.fields.title ?? e.message) : String(e));
     } finally {
       setBusy(false);
     }
@@ -250,6 +252,9 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
       <div className="flex flex-col gap-4">
         <Field label="Name" htmlFor="type-name" error={error} helper={mode === "new" ? "For example Bin, Rack, Workstation, Kanban, Front, Back." : undefined}>
           <Input id="type-name" autoFocus maxLength={40} value={name} error={error} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && name.trim() && void save()} />
+        </Field>
+        <Field label="Title on label" htmlFor="type-title" helper="Printed in the black band at the top of the label.">
+          <Input id="type-title" maxLength={24} placeholder={name.trim().toUpperCase()} className="uppercase" value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
         {mode === "new" && (
           <Field label="Start from the design of" htmlFor="type-copy">

@@ -17,6 +17,7 @@ from app.configs.spec import LabelSpec, ManualBox, SpecField
 from app.errors import message_for
 from app.render.canvas import SAFE_MARGIN_DOTS, canvas_for, new_canvas, png_bytes, sha256
 from app.render.fonts import load_font
+from app.render.house import HouseBoxes, draw_house, is_compact
 
 QR_GAP = 16
 IMAGE_GAP = 16
@@ -71,6 +72,8 @@ class RenderResult:
     height_dots: int
     qr_payload: str | None
     family: str
+    layout_box: tuple[int, int, int, int] = (0, 0, 0, 0)  # where the layout drew (x, y, w, h), for click targets
+    house: HouseBoxes | None = None  # the frame, band and footer drawn (labels with a house style)
 
 
 # ---------------------------------------------------------------- values
@@ -647,6 +650,17 @@ def render_grid(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str,
 
 
 # ---------------------------------------------------------------- render
+def _with_house(config: RenderConfig, hs: dict[str, Any], band: bool) -> RenderConfig:
+    """The house font replaces the design's font, and values are bold unless a box says otherwise (D21). With the
+    title band drawn, the bin layout's own title bar moves into the band."""
+    style = config.spec.style.model_copy(update={"font": hs.get("font") or "inter", "primary_weight": "bold"})
+    update: dict[str, Any] = {"style": style}
+    if band and style.layout == "bin":
+        update["bin"] = config.spec.bin.model_copy(update={"title": ""})
+    return RenderConfig(spec=config.spec.model_copy(update=update), qr_mode=config.qr_mode,
+                        field_labels=config.field_labels)
+
+
 def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, printer: RenderPrinter,
            picture: Image.Image | None = None) -> RenderResult:
     """`picture` is the part's image when the snapshot prints one (generated.image_sha256); a snapshot that
@@ -659,7 +673,23 @@ def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, pri
     W, H, dpi = canvas.width_dots, canvas.height_dots, canvas.dpi
     m = SAFE_MARGIN_DOTS
     cx, cy, cw, ch = m, m, W - 2 * m, H - 2 * m
+    layout_box = (cx, cy, cw, ch)
+    boxes: HouseBoxes | None = None
     warnings: list[Warning] = []
+
+    # v1.1 house style: frame, title band and footer around the layout, one font for every label type.
+    hs = snapshot.get("generated", {}).get("house_style")
+    if isinstance(hs, dict):
+        compact = is_compact(H, dpi)
+        config = _with_house(config, hs, band=bool(hs.get("title_band", True)) and not compact)
+        spec, style = config.spec, config.spec.style
+        printed = spec.printed_keys()
+        generated = snapshot.get("generated", {})
+        boxes = draw_house(draw, hs, (cx, cy, cw, ch), dpi, compact,
+                           None if "serial" in printed else display_value(generated.get("serial")),
+                           None if "print_date" in printed else display_value(generated.get("print_date")), RULE)
+        cx, cy, cw, ch = boxes.layout
+        layout_box = boxes.grid
 
     def warn(code: str, key: str | None = None) -> None:
         label = config.field_labels.get(key or "")
@@ -671,12 +701,13 @@ def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, pri
 
     if style.layout in ("bin", "grid"):
         draw_layout = render_grid if style.layout == "grid" else render_bin
-        payload = draw_layout(img, draw, snapshot, config, (cx, cy, cw, ch), dpi, picture, warn)
+        payload = draw_layout(img, draw, snapshot, config, layout_box, dpi, picture, warn)
         for key in required_missing(spec, snapshot):
             warn("REQUIRED_VALUE_MISSING", f"manual.{key}")
         png = png_bytes(img)
         return RenderResult(png=png, sha256=sha256(png), fits=not warnings, warnings=warnings, width_dots=W,
-                            height_dots=H, qr_payload=payload, family=style.layout)
+                            height_dots=H, qr_payload=payload, family=style.layout,
+                            layout_box=layout_box, house=boxes)
 
     # 7.4 layout family.
     tx, ty, tw, th = cx, cy, cw, ch
@@ -755,4 +786,5 @@ def render(snapshot: dict[str, Any], config: RenderConfig, size: RenderSize, pri
 
     png = png_bytes(img)
     return RenderResult(png=png, sha256=sha256(png), fits=not warnings, warnings=warnings, width_dots=W,
-                        height_dots=H, qr_payload=payload, family=family)
+                        height_dots=H, qr_payload=payload, family=family,
+                        layout_box=(cx, cy, cw, ch), house=boxes)

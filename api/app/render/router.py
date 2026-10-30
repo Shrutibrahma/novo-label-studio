@@ -15,6 +15,7 @@ from app.configs.router import DraftConfig, checked_spec
 from app.errors import ApiError
 from app.models import LabelConfig, Part
 from app.render.service import ConfigLike, preview_serial, render_context, render_part
+from app.settings.router import checked_house_style
 from app.timeutil import local_today, request_zone
 
 router = APIRouter(prefix="/render", tags=["render"])
@@ -26,6 +27,7 @@ class PreviewIn(BaseModel):
     config_id: uuid.UUID | None = None
     config: DraftConfig | None = None
     manual_values: dict[str, Any] | None = None
+    house_style: dict[str, Any] | None = None  # an unsaved Settings → Label style draft (Admin only)
 
 
 class WarningOut(BaseModel):
@@ -43,26 +45,34 @@ class PreviewOut(BaseModel):
     dpi: int
     family: str
     serial_placeholder: bool
+    layout_box: list[int]  # x, y, w, h in dots: where the design's rows and boxes are drawn
 
 
 @router.post("/preview", response_model=PreviewOut)
-async def preview(body: PreviewIn, request: Request, _: AnyUser, db: DB) -> PreviewOut:
+async def preview(body: PreviewIn, request: Request, user: AnyUser, db: DB) -> PreviewOut:
+    house = None
+    if body.house_style is not None:
+        if not user.is_admin:
+            raise ApiError("FORBIDDEN")
+        house = await checked_house_style(db, body.house_style)
     part = await db.get(Part, body.part_id)
     if part is None:
         raise ApiError("NOT_FOUND")
     if body.config is not None:
         await checked_spec(db, body.config.spec, body.config.qr_mode, body.config.serial_mode)
-        cfg = ConfigLike(body.config.label_size_id, body.config.spec, body.config.qr_mode, body.config.serial_mode)
+        cfg = ConfigLike(body.config.label_size_id, body.config.spec, body.config.qr_mode, body.config.serial_mode,
+                         body.label_type_id)
     else:
         stored = await db.get(LabelConfig, body.config_id) if body.config_id else await effective_config(db, part.id, body.label_type_id)
         if stored is None:
             raise ApiError("NOT_FOUND")
-        cfg = ConfigLike(stored.label_size_id, stored.spec, stored.qr_mode, stored.serial_mode)
+        cfg = ConfigLike(stored.label_size_id, stored.spec, stored.qr_mode, stored.serial_mode, stored.label_type_id)
     ctx = await render_context(db)
     serial = preview_serial(ctx.sequence) if cfg.serial_mode == "required" else None
     result, _, _, _ = await render_part(db, ctx, part, cfg, body.manual_values,
-                                        local_today(request_zone(request)).isoformat(), serial)
+                                        local_today(request_zone(request)).isoformat(), serial, house)
     return PreviewOut(png_base64=base64.b64encode(result.png).decode("ascii"), fits=result.fits,
                       warnings=[WarningOut(code=w.code, field=w.field, message=w.message) for w in result.warnings],
                       width_dots=result.width_dots, height_dots=result.height_dots, dpi=ctx.printer.dpi,
-                      family=result.family, serial_placeholder=serial is not None)
+                      family=result.family, serial_placeholder=serial is not None,
+                      layout_box=list(result.layout_box))

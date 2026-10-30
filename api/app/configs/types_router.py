@@ -16,6 +16,7 @@ from app.configs.effective import current_default, resolve_type
 from app.errors import ApiError
 from app.models import LabelConfig, LabelType
 from app.parts.router import SizeBrief, size_brief
+from app.render.house import TITLE_MAX
 
 router = APIRouter(tags=["label types"])
 
@@ -25,6 +26,7 @@ MAX_TYPES = 30
 class LabelTypeOut(BaseModel):
     id: str
     name: str
+    title: str | None  # printed in the title band; None = the name
     sort_order: int
     size: SizeBrief
     layout: str
@@ -36,19 +38,30 @@ class LabelTypeOut(BaseModel):
 
 class TypeIn(BaseModel):
     name: str = Field(min_length=1, max_length=40)
+    title: str | None = Field(default=None, max_length=40)
     copy_from_type_id: uuid.UUID | None = None
+
+
+def clean_title(raw: str | None) -> str | None:
+    """Trimmed; empty means none (the band shows the name). At most 24 characters."""
+    title = (raw or "").strip()
+    if len(title) > TITLE_MAX:
+        raise ApiError("FIELD_TOO_LONG", fields={"title": f"Title on label is longer than {TITLE_MAX} characters."},
+                       Field="Title on label", max=TITLE_MAX)
+    return title or None
 
 
 class TypePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=40)
     sort_order: int | None = Field(default=None, ge=0, le=1000)
+    title: str | None = Field(default=None, max_length=40)  # trimmed, then at most 24; null or empty clears it
 
 
 async def type_out(db: DB, t: LabelType) -> LabelTypeOut:
     cfg = await current_default(db, t.id)
     overrides = (await db.execute(select(func.count()).select_from(LabelConfig).where(
         LabelConfig.label_type_id == t.id, LabelConfig.scope == "part", LabelConfig.is_current.is_(True)))).scalar_one()
-    return LabelTypeOut(id=str(t.id), name=t.name, sort_order=t.sort_order, size=await size_brief(db, cfg.label_size_id),
+    return LabelTypeOut(id=str(t.id), name=t.name, title=t.title, sort_order=t.sort_order, size=await size_brief(db, cfg.label_size_id),
                         layout=str(cfg.spec.get("style", {}).get("layout", "lines")), version=cfg.version,
                         default_config_id=str(cfg.id), override_count=int(overrides), created_at=t.created_at)
 
@@ -81,7 +94,7 @@ async def create_type(body: TypeIn, user: Admin, db: DB) -> LabelTypeOut:
         raise ApiError("INVALID_STATE")
     source = await current_default(db, (await resolve_type(db, body.copy_from_type_id)).id)
     last = (await db.execute(select(func.max(LabelType.sort_order)))).scalar_one()
-    t = LabelType(name=name, sort_order=int(last or 0) + 1, created_by=user.id)
+    t = LabelType(name=name, title=clean_title(body.title), sort_order=int(last or 0) + 1, created_by=user.id)
     db.add(t)
     await db.flush()
     cfg = LabelConfig(label_type_id=t.id, config_key=uuid.uuid4(), version=1, scope="default", part_id=None,
@@ -98,13 +111,16 @@ async def create_type(body: TypeIn, user: Admin, db: DB) -> LabelTypeOut:
 @router.patch("/label-types/{type_id}", response_model=LabelTypeOut)
 async def update_type(type_id: uuid.UUID, body: TypePatch, user: Admin, db: DB) -> LabelTypeOut:
     t = await resolve_type(db, type_id)
-    before = {"name": t.name, "sort_order": t.sort_order}
+    before = {"name": t.name, "sort_order": t.sort_order, "title": t.title}
     if body.name is not None and body.name.strip() != t.name:
         await name_free(db, body.name.strip(), t.id)
         t.name = body.name.strip()
     if body.sort_order is not None:
         t.sort_order = body.sort_order
-    audit(db, user.id, "label_type.update", "label_type", t.id, before, {"name": t.name, "sort_order": t.sort_order})
+    if "title" in body.model_fields_set:
+        t.title = clean_title(body.title)
+    audit(db, user.id, "label_type.update", "label_type", t.id, before,
+          {"name": t.name, "sort_order": t.sort_order, "title": t.title})
     await db.commit()
     return await type_out(db, t)
 

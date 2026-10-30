@@ -326,3 +326,44 @@ chosen, and why. None of these change a Decision-log item. One changes the datab
     sha256 and History are unchanged; only the bytes sent to the printer differ. Migration 0004 adds
     `printer.label_border`: `smaller` (default: border only when centered), `always` (also on same-size labels,
     4 dots in from the edge, inside the 13-dot safe margin) or `never`. The print preview shows the label on the roll.
+
+## v1.1
+
+Decisions for `SPEC.md` v1.1 (addendum of 2026-10-30) that the addendum left open, numbered from #100.
+
+100. **Decision numbers clash.** SPEC.md v1 already uses D21 (product name "Novo Smart Labels"). The addendum's
+     D21–D26 are kept as numbered (code and docs refer to them) and listed in their own "v1.1" table in SPEC.md's
+     decision log; inside v1.1 material "D21" means the house label style.
+101. **Where the house style lives on a label.** Every new snapshot has `generated.house_style`: the full
+     `HouseStyle` plus the resolved `title` and the `company` name printed in the band (the company is stored too,
+     so a re-render at another DPI is exact after a rename). The renderer reads it from the snapshot; snapshots
+     without it (printed before v1.1) render exactly as in v1. As 4.3 asks: changing the house style does **not**
+     mark labels "out of date" — freshness compares printed part values only.
+102. **"Everything else is drawn inside it, inset 4 dots."** Read as: the frame is 4 dots on the content-box edge
+     and the band, footer and layouts sit inside it. Text layouts (lines) keep a further 4-dot gap from the frame,
+     band and footer rule so text never touches them. Box layouts (grid, bin) are grown by their 2-dot rule width
+     on every side that meets the frame, band or footer rule, so box outlines merge into them instead of doubling
+     (the frame stays 4 dots, the footer rule 2).
+103. **Footer and band geometry.** Footer = 2-dot rule, then a region of font line height + 6 dots with the text
+     vertically centred in it; serial at 8 dots from the left, date at 8 dots from the right. Band text is
+     centred on its capital height. The company name is left out when 8 + title + 24 + company + 8 dots exceed the
+     band width. Size class uses the label's height in dots (< 1.5 × dpi = Compact).
+104. **Audit action** for Settings → Label style: `setting.update`, entity `app_setting`, entity id
+     `label.house_style`, with before/after.
+105. **Design font no longer validated.** `style.font` is ignored by the renderer for labels with a house style,
+     so publishing a config no longer checks it against `fonts.allowed` (an admin who later disallows a font could
+     otherwise never save an older design). The house style's font is checked against `fonts.allowed`.
+106. **schema.sql stays the 0001 baseline.** Migration 0001 applies `schema.sql` verbatim, so v1.1 changes are
+     made by migrations 0005 (U1), 0006 (U2) and 0007 (U4), as 0002–0004 did; `schema.sql` itself is unchanged.
+107. **"Title on label"** is set in the Configure "Rename" dialog (under the name) and when creating a type;
+     `POST /label-types` accepts `title` too. Empty = none (the band shows the name).
+108. **Click targets on the preview.** `POST /render/preview` returns `layout_box` (x, y, w, h in dots), the area
+     the rows and boxes are drawn in, so the Configure editor's click-to-edit boxes line up inside the frame,
+     band and footer.
+109. **Grid templates on the server.** The industrial presets (U3) and the uniformity test need the "bin" and
+     "tps" grid templates in Python, so `app/configs/presets.py` mirrors `gridTemplate` in
+     `web/src/features/configure/GridBuilder.tsx`; the two must change together.
+110. **v1 goldens.** The 27 v1 renderer goldens use snapshots without a house style, which still render as in v1,
+     so they are unchanged and now cover reprints of pre-v1.1 labels. New goldens: `house_goldens.json`
+     (4 sizes × band on/off × footer on/off × qr_side and the bin-template grid = 32). The bin-template grid on
+     Small (2 × 1 in) doesn't fit with or without the house style — that template is too dense for Small.

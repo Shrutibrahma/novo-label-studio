@@ -8,6 +8,8 @@ import { qk } from "./queries";
 export interface LabelType {
   id: string;
   name: string;
+  /** Printed in the title band; null = the name. */
+  title: string | null;
   sort_order: number;
   size: SizeBrief;
   layout: "lines" | "grid" | "bin";

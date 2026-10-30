@@ -51,4 +51,5 @@ DEFAULT_SPEC: dict[str, Any] = {
 
 SETTING_COMPANY = "company.name"
 SETTING_FONTS = "fonts.allowed"
+SETTING_HOUSE_STYLE = "label.house_style"  # v1.1 D21, migration 0005
 ALL_FONTS = ["inter", "roboto_condensed", "atkinson"]

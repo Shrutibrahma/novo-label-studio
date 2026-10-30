@@ -71,3 +71,12 @@ export interface AppSettings {
   serial: SerialSettings;
   fonts_allowed: string[];
 }
+
+/** Settings → Label style (v1.1 D21): one look for every label. */
+export interface HouseStyle {
+  font: "inter" | "roboto_condensed" | "atkinson";
+  frame: boolean;
+  title_band: boolean;
+  company_in_band: boolean;
+  footer: boolean;
+}

@@ -26,7 +26,16 @@ from app.models import LabelConfig, LabelGroup, LabelSize, Part, Printer, Printe
 from app.printing.jobs import JobOut, assert_printer_ready, job_out, printer_settings, queue_jobs
 from app.render.canvas import sha256
 from app.render.engine import RenderResult
-from app.render.service import image_of, label_name_of, part_values, preview_serial, render_context, render_snapshot
+from app.render.service import (
+    house_snapshot,
+    image_of,
+    label_name_of,
+    part_values,
+    preview_serial,
+    render_context,
+    render_snapshot,
+    type_of,
+)
 from app.render.snapshot import build_snapshot, clean_manual, field_labels
 from app.render.zpl import job_payload
 from app.timeutil import local_today, request_zone
@@ -192,6 +201,10 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
     await check_loaded_size(db, printer, planned, body.loaded_size_confirmed, user.id)
     print_date = local_today(request_zone(request)).isoformat()
 
+    # The house style each label is drawn with (v1.1 D21): one per label type in the request.
+    house = {p.config.label_type_id: house_snapshot(ctx, await type_of(db, p.config.label_type_id), p.spec)
+             for p in planned}
+
     # Refuse before allocating anything if a label can't fit (the placeholder serial is the widest possible).
     for p in planned:
         values = part_values(p.part, await label_name_of(db, p.part.id), await image_of(db, p.part))
@@ -201,7 +214,8 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
         if box is not None:
             manual[box.key] = {"index": p.indexes[0] or 1, "total": p.item.group.total if p.item.group else 1}
         serial = preview_serial(ctx.sequence) if p.config.serial_mode == "required" else None
-        snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date, labels)
+        snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date, labels,
+                              house[p.config.label_type_id])
         result = await to_thread.run_sync(render_snapshot, snap, p.spec, p.config.qr_mode, p.size, printer, labels)
         if not result.fits:
             raise _first_warning(result)
@@ -241,7 +255,8 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
             manual = dict(p.manual)
             if box is not None:
                 manual[box.key] = {"index": index or 1, "total": p.item.group.total if p.item.group else 1}
-            snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date, labels)
+            snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date, labels,
+                                  house[p.config.label_type_id])
             result = await to_thread.run_sync(render_snapshot, snap, p.spec, p.config.qr_mode, p.size, printer, labels)
             if not result.fits:  # can't happen after the placeholder check; never print a label that doesn't fit
                 raise _first_warning(result)

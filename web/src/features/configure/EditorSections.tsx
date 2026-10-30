@@ -1,7 +1,8 @@
 import { ChevronDown, GripVertical, Image as ImageIcon, Plus, X, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { Link } from "react-router";
 import { Button } from "../../components/Button";
-import { Input, SegmentedControl, Select, Switch } from "../../components/Form";
+import { Input, SegmentedControl, Switch } from "../../components/Form";
 import { Tooltip } from "../../components/Tooltip";
 import { inches } from "../../lib/format";
 import type { CustomField, LabelStyle, ManualField, SpecField } from "../../lib/parts";
@@ -450,8 +451,8 @@ const FONT_FAMILY: Record<LabelStyle["font"], string> = {
   atkinson: "Atkinson Hyperlegible",
 };
 
-/** Section "Style". */
-export function StyleSection({ style, fonts, onChange }: { style: LabelStyle; fonts: string[]; onChange: (s: Partial<LabelStyle>) => void }) {
+/** Section "Style". Font and weight come from the house label style (Settings → Label style). */
+export function StyleSection({ style, onChange }: { style: LabelStyle; onChange: (s: Partial<LabelStyle>) => void }) {
   const bin = style.layout === "bin" || style.layout === "grid";
   const Row = ({ label, children }: { label: string; children: ReactNode }) => (
     <div className="flex flex-col gap-1.5">
@@ -461,19 +462,13 @@ export function StyleSection({ style, fonts, onChange }: { style: LabelStyle; fo
   );
   return (
     <>
-      <Row label="Font">
-        <Select
-          aria-label="Font"
-          value={style.font}
-          style={{ fontFamily: FONT_FAMILY[style.font] }}
-          onChange={(e) => onChange({ font: e.target.value as LabelStyle["font"] })}
-          options={(Object.keys(FONT_FAMILY) as LabelStyle["font"][]).filter((f) => fonts.includes(f)).map((f) => ({ value: f, label: FONT_FAMILY[f], style: { fontFamily: FONT_FAMILY[f] } }))}
-        />
-      </Row>
-      <Row label="Main line weight">
-        <SegmentedControl ariaLabel="Main line weight" value={style.primary_weight} onChange={(v) => onChange({ primary_weight: v })}
-          options={[{ value: "regular", label: "Regular" }, { value: "bold", label: "Bold" }, { value: "extra_bold", label: "Extra bold" }]} />
-      </Row>
+      <p className="t-small text-text-secondary">
+        Font and frame come from{" "}
+        <Link to="/settings/label-style" className="font-medium text-primary underline-offset-2 hover:underline">
+          Settings → Label style
+        </Link>
+        .
+      </p>
       {!bin && (<>
       <Row label="Text size">
         <SegmentedControl ariaLabel="Text size" value={style.emphasis} onChange={(v) => onChange({ emphasis: v })}

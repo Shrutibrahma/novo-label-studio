@@ -13,12 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import audit
 from app.auth.deps import DB, Admin, AnyUser
-from app.configs.defaults import ALL_FONTS, SETTING_FONTS
 from app.configs.effective import current_default, current_override, effective_config, resolve_type
 from app.configs.spec import LabelSpec, SpecField, parse_spec, validate_spec
 from app.errors import ApiError
 from app.models import (
-    AppSetting,
     AppUser,
     CustomFieldDef,
     LabelConfig,
@@ -111,14 +109,9 @@ async def printable_custom_keys(db: AsyncSession) -> set[str]:
     return set((await db.execute(select(CustomFieldDef.key).where(CustomFieldDef.printable.is_(True)))).scalars())
 
 
-async def allowed_fonts(db: AsyncSession) -> list[str]:
-    row = await db.get(AppSetting, SETTING_FONTS)
-    return list(row.value) if row is not None else list(ALL_FONTS)
-
-
 async def checked_spec(db: AsyncSession, raw: dict[str, Any], qr_mode: str, serial_mode: str) -> LabelSpec:
     spec = parse_spec(raw)
-    validate_spec(spec, await printable_custom_keys(db), qr_mode, serial_mode, await allowed_fonts(db))
+    validate_spec(spec, await printable_custom_keys(db), qr_mode, serial_mode)
     return spec
 
 

@@ -60,6 +60,8 @@ ManualField = Annotated[ManualText | ManualNumber | ManualChoice | ManualBox, Fi
 
 
 class Style(_Strict):
+    # v1.1 D21: font and primary_weight are kept so earlier snapshots and configs validate, but labels with a
+    # house style (every label printed from v1.1 on) use the house font and bold values instead.
     font: Literal["inter", "roboto_condensed", "atkinson"] = "inter"
     primary_weight: Literal["regular", "bold", "extra_bold"] = "bold"
     alignment: Literal["left", "center"] = "left"
@@ -159,8 +161,7 @@ def parse_spec(raw: Any) -> LabelSpec:
         raise ApiError("CONFIG_INVALID") from exc
 
 
-def validate_spec(spec: LabelSpec, custom_keys: set[str], qr_mode: str, serial_mode: str,
-                  allowed_fonts: list[str]) -> None:
+def validate_spec(spec: LabelSpec, custom_keys: set[str], qr_mode: str, serial_mode: str) -> None:
     """Semantic rules on top of the shape: role limits, known field keys, manual field rules, QR/serial."""
     counts = {r: 0 for r in ROLE_LIMITS}
     seen: set[str] = set()
@@ -199,8 +200,6 @@ def validate_spec(spec: LabelSpec, custom_keys: set[str], qr_mode: str, serial_m
         raise ApiError("CONFIG_ROLE_LIMIT")
     if qr_mode == "serial" and serial_mode != "required":
         raise ApiError("CONFIG_QR_NEEDS_SERIAL")
-    if spec.style.font not in allowed_fonts:
-        raise ApiError("CONFIG_INVALID")
     if (qr_mode != "none" and spec.style.layout == "lines"
             and spec.style.image_position == spec.style.qr_position):
         raise ApiError("CONFIG_IMAGE_QR_SAME_SIDE")

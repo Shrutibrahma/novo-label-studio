@@ -10,7 +10,7 @@ import { ConfirmDialog } from "../../components/Overlay";
 import { api, ApiError } from "../../lib/api";
 import { formatDate } from "../../lib/format";
 import { labelTypesKey, useLabelTypes } from "../../lib/labelTypes";
-import { qk, useSettings, useSizes } from "../../lib/queries";
+import { qk, useSizes } from "../../lib/queries";
 import { useCustomFields, usePart, type LabelStyle } from "../../lib/parts";
 import { FieldsSection, LayoutSection, ManualSection, PictureSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
 import { GridBuilder, GridOverlay, gridTemplate, KANBAN_CARD_FIELD, type GridSel } from "./GridBuilder";
@@ -36,7 +36,6 @@ export function ConfigEditorPage() {
   const qc = useQueryClient();
   const sizes = useSizes();
   const custom = useCustomFields();
-  const settings = useSettings();
   const part = usePart(partId ?? null);
   const first = useFirstActivePart();
 
@@ -80,7 +79,7 @@ export function ConfigEditorPage() {
   const dirty = draft !== null && JSON.stringify(draft) !== initial;
   const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && !allowLeave.current && currentLocation.pathname !== nextLocation.pathname);
 
-  const preview = usePreview(draft && previewPart ? { part_id: previewPart.id, config: draft } : null, 250);
+  const preview = usePreview(draft && previewPart ? { part_id: previewPart.id, config: draft, label_type_id: base.data?.label_type_id } : null, 250);
   const shownWarnings = useMemo(() => (preview.data?.warnings ?? []).filter((w) => !EDITOR_IGNORED.has(w.code)), [preview.data]);
   const fits = preview.data !== undefined && shownWarnings.length === 0;
 
@@ -188,8 +187,8 @@ export function ConfigEditorPage() {
               onChange={(patch, style) => setDraft({ ...draft, ...patch, spec: style ? { ...draft.spec, style: { ...draft.spec.style, ...style } } : draft.spec })}
             />
           </Section>
-          <Section title="Style" step={6} icon={Palette} hint={isGrid ? "Font and weight" : "Font, weight, size and spacing"}>
-            <StyleSection style={draft.spec.style} fonts={settings.data?.fonts_allowed ?? ["inter", "roboto_condensed", "atkinson"]} onChange={setStyle} />
+          <Section title="Style" step={6} icon={Palette} hint={isGrid ? "Font and frame" : "Text size and spacing"}>
+            <StyleSection style={draft.spec.style} onChange={setStyle} />
           </Section>
           <Section title="Print-time fields" step={7} icon={TextCursorInput} hint="Typed in when printing, e.g. lot number or BOX 1/3">
             <ManualSection draft={draft} onChange={(manual_fields, fields) => setDraft({ ...draft, spec: { ...draft.spec, manual_fields, fields } })} />
@@ -219,8 +218,8 @@ export function ConfigEditorPage() {
             loading={preview.isFetching}
             maxHeight={480}
             overlay={
-              isGrid && preview.data && draft.spec.grid ? (
-                <GridOverlay grid={draft.spec.grid} widthDots={preview.data.width_dots} heightDots={preview.data.height_dots} sel={gridSel} onSel={setGridSel} />
+              isGrid && preview.data?.layout_box && draft.spec.grid ? (
+                <GridOverlay grid={draft.spec.grid} widthDots={preview.data.width_dots} heightDots={preview.data.height_dots} layoutBox={preview.data.layout_box} sel={gridSel} onSel={setGridSel} />
               ) : undefined
             }
           />

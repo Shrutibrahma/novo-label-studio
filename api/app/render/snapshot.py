@@ -135,9 +135,10 @@ def clean_manual(spec: LabelSpec, values: dict[str, Any] | None, labels: dict[st
 
 def build_snapshot(spec: LabelSpec, qr_mode: str, part_values: dict[str, Any], custom_keys: set[str],
                    manual: dict[str, Any], serial: str | None, print_date: str,
-                   labels: dict[str, str] | None = None) -> dict[str, Any]:
+                   labels: dict[str, str] | None = None, house: dict[str, Any] | None = None) -> dict[str, Any]:
     """snapshot.part keys are exactly the part fields printed on the label (core, custom, label_name) with the
-    source JSON types; empty fields aren't printed, so they aren't in the snapshot."""
+    source JSON types; empty fields aren't printed, so they aren't in the snapshot. `house` is the house style
+    (render.house.snapshot_style) the label is drawn with."""
     printed = [k for k in spec.printed_keys() if k in CORE_KEYS or k == "label_name" or k in custom_keys]
     part = {k: part_values[k] for k in printed if k in part_values and display_value(part_values[k]) != ""}
     generated: dict[str, Any] = {"print_date": print_date, "renderer_version": renderer_version()}
@@ -155,4 +156,6 @@ def build_snapshot(spec: LabelSpec, qr_mode: str, part_values: dict[str, Any], c
         # label out of date); the sha locates the content-addressed file for exact re-renders.
         part[IMAGE_KEY] = part_values[IMAGE_KEY]
         generated["image_sha256"] = part_values["_image_sha256"]
+    if house is not None:
+        generated["house_style"] = house
     return {"part": part, "manual": manual, "generated": generated}

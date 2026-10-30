@@ -80,6 +80,13 @@ These decisions are final for v1. Changing one requires editing this table first
 | D20 | Icons: lucide-react only | One consistent set |
 | D21 | Product name: "Novo Smart Labels" (was the working name "Novo Label Studio"; renamed 2026-09-30 at the owner's request). Company name configurable in Settings | The owner's choice |
 
+**v1.1 (addendum of 2026-10-30).** v1.1 numbers its own items; "D21" in v1.1 material is the house style
+(OPEN_QUESTIONS #100).
+
+| # | Decision | Rationale |
+| --- | --- | --- |
+| D21 (v1.1) | **House label style.** One company-wide style (font, frame, title band, footer) applied by the renderer to every label type. Per-type designs control content and box structure only; they no longer choose font or weight. Stored per label in `generated.house_style` (migration 0005) | G3: uniform labels |
+
 ## 3. Hardware
 
 Target printer is the Zebra ZQ630 Plus: 203 dpi direct thermal, 4.1" max print width (832 dots), media 2.0"–4.4" wide, USB, Wi-Fi, Bluetooth. v1 uses USB only.

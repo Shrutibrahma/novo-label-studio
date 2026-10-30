@@ -12,6 +12,20 @@ Novo Smart Labels v1, built milestone by milestone from `SPEC.md` + `schema.sql`
 | M5 Print (agent with simulated printer) | done |
 | M6 History + hardening (reprint, void, backups, performance, README) | done |
 
+## v1.1
+
+Built from the v1.1 addendum (house style, remembered types, industrial presets, quick labels, operations).
+Decisions it left open: `OPEN_QUESTIONS.md` § v1.1 (#100–).
+
+| Milestone | State |
+| --- | --- |
+| H Hardware validation | waiting for the ZQ630 Plus — must pass before v1.1 is done |
+| U1 House label style | done |
+| U2 Remember the type | not started |
+| U3 Industrial presets + box options | not started |
+| U4 Quick labels | not started |
+| U5 Operations | not started |
+
 See `README.md` for setup, running, tests and switching the agent to USB, and the hardware checks still to run.
 Every decision the spec left open is in `OPEN_QUESTIONS.md` (#1–99). One approved schema change: migration 0002
 (faster `search_parts()`), see #75.

@@ -5,14 +5,15 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import exists, select
 
 from app.audit import audit
 from app.auth.deps import DB, Admin, AnyUser
-from app.configs.defaults import ALL_FONTS, SETTING_COMPANY, SETTING_FONTS
+from app.configs.defaults import ALL_FONTS, SETTING_COMPANY, SETTING_FONTS, SETTING_HOUSE_STYLE
 from app.errors import ApiError, field_error
 from app.models import AppSetting, IssuedSerial, SerialSequence
+from app.render.house import HouseStyle
 from app.setup_router import PREFIX_RE
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -126,3 +127,43 @@ async def patch_settings(body: SettingsPatch, user: Admin, db: DB) -> SettingsOu
             audit(db, user.id, "serial.update", "serial_sequence", seq.id, before, after)
     await db.commit()
     return await settings_out(db)
+
+
+# ---------------------------------------------------------------- label style (v1.1 D21)
+async def house_style(db: DB) -> HouseStyle:
+    raw = await get_setting(db, SETTING_HOUSE_STYLE, None)
+    try:
+        return HouseStyle.model_validate(raw) if raw is not None else HouseStyle()
+    except ValidationError:
+        return HouseStyle()
+
+
+async def checked_house_style(db: DB, raw: Any) -> HouseStyle:
+    """A house style sent by the client (Settings → Label style, or its draft in a preview)."""
+    try:
+        style = HouseStyle.model_validate(raw)
+    except ValidationError as exc:
+        raise ApiError("CONFIG_INVALID") from exc
+    if style.font not in await get_setting(db, SETTING_FONTS, ALL_FONTS):
+        raise ApiError("CONFIG_INVALID")
+    return style
+
+
+@router.get("/label-style", response_model=HouseStyle)
+async def read_label_style(_: AnyUser, db: DB) -> HouseStyle:
+    return await house_style(db)
+
+
+@router.put("/label-style", response_model=HouseStyle)
+async def write_label_style(body: dict[str, Any], user: Admin, db: DB) -> HouseStyle:
+    style = await checked_house_style(db, body)
+    row = await db.get(AppSetting, SETTING_HOUSE_STYLE)
+    before = (await house_style(db)).model_dump()
+    if row is None:
+        db.add(AppSetting(key=SETTING_HOUSE_STYLE, value=style.model_dump(), updated_by=user.id))
+    else:
+        row.value = style.model_dump()
+        row.updated_by = user.id
+    audit(db, user.id, "setting.update", "app_setting", SETTING_HOUSE_STYLE, before, style.model_dump())
+    await db.commit()
+    return style

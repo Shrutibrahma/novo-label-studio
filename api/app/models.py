@@ -204,6 +204,7 @@ class LabelType(Base):
     __tablename__ = "label_type"
     id: Mapped[uuid.UUID] = _pk()
     name: Mapped[str] = mapped_column(Text)
+    title: Mapped[str | None] = mapped_column(Text)  # printed in the title band; NULL = the name (migration 0005)
     sort_order: Mapped[int] = mapped_column(Integer, server_default=DB_DEFAULT)
     archived: Mapped[bool] = mapped_column(Boolean, server_default=DB_DEFAULT)
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("app_user.id"))

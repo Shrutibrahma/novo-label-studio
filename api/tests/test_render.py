@@ -388,9 +388,9 @@ def test_bin_spec_rejects_unknown_box_field() -> None:
     from app.configs.spec import validate_spec
     from app.errors import ApiError
     s = bin_spec()
-    validate_spec(s, set(BIN_CUSTOM), "part", "none", ["inter"])
+    validate_spec(s, set(BIN_CUSTOM), "part", "none")
     with pytest.raises(ApiError) as err:
-        validate_spec(s, {"bin_qty"}, "part", "none", ["inter"])
+        validate_spec(s, {"bin_qty"}, "part", "none")
     assert err.value.code == "CONFIG_FIELD_UNKNOWN"
 
 
@@ -472,12 +472,12 @@ def test_grid_validation() -> None:
     from app.configs.spec import validate_spec
     from app.errors import ApiError
     keys = set(BIN_CUSTOM)
-    validate_spec(grid_spec(BIN_CARD), keys, "part", "none", ["inter"])
+    validate_spec(grid_spec(BIN_CARD), keys, "part", "none")
     for spec_, qr, code in [(grid_spec([]), "none", "CONFIG_GRID_EMPTY"),
                             (grid_spec(BIN_CARD), "none", "CONFIG_QR_BOX_NEEDS_QR"),
                             (grid_spec([{"cells": [cell("nope")]}]), "none", "CONFIG_FIELD_UNKNOWN")]:
         with pytest.raises(ApiError) as err:
-            validate_spec(spec_, keys, qr, "none", ["inter"])
+            validate_spec(spec_, keys, qr, "none")
         assert err.value.code == code
     with pytest.raises(Exception):
         grid_spec([{"cells": [cell("part_number")] * 7}])  # at most 6 boxes in a row

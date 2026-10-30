@@ -197,19 +197,19 @@ function WidthBar({ row, rowIndex, selected, onSelect, onWidths, label }: {
 /** Section "Boxes" (grid layout): templates, rows of boxes, and the editor of the selected box. */
 export type GridSel = { row: number; cell: number } | null;
 
-/** Where each box sits on the label, as fractions of the label (same arithmetic as the renderer's grid). */
-export function gridBoxes(grid: GridLayout, widthDots: number, heightDots: number, marginDots = 13) {
+/** Where each box sits on the label, as fractions of the label (same arithmetic as the renderer's grid).
+ * `layoutBox` is the preview's layout_box: the area inside the house frame, band and footer. */
+export function gridBoxes(grid: GridLayout, widthDots: number, heightDots: number, layoutBox: [number, number, number, number]) {
   const shares = (weights: number[], total: number) => {
     const sum = weights.reduce((a, b) => a + b, 0) || 1;
     const out = weights.slice(0, -1).map((w) => Math.floor((total * w) / sum));
     return [...out, total - out.reduce((a, b) => a + b, 0)];
   };
-  const w = widthDots - 2 * marginDots;
-  const h = heightDots - 2 * marginDots;
+  const [x0, y0, w, h] = layoutBox;
   const boxes: { row: number; cell: number; x: number; y: number; w: number; h: number }[] = [];
-  let y = marginDots;
+  let y = y0;
   shares(grid.rows.map((r) => r.height), h).forEach((rh, r) => {
-    let x = marginDots;
+    let x = x0;
     shares(grid.rows[r]!.cells.map((c) => c.width), w).forEach((cw, c) => {
       boxes.push({ row: r, cell: c, x: x / widthDots, y: y / heightDots, w: cw / widthDots, h: rh / heightDots });
       x += cw;
@@ -220,10 +220,17 @@ export function gridBoxes(grid: GridLayout, widthDots: number, heightDots: numbe
 }
 
 /** Click a box on the label preview to edit it. */
-export function GridOverlay({ grid, widthDots, heightDots, sel, onSel }: { grid: GridLayout; widthDots: number; heightDots: number; sel: GridSel; onSel: (s: GridSel) => void }) {
+export function GridOverlay({ grid, widthDots, heightDots, layoutBox, sel, onSel }: {
+  grid: GridLayout;
+  widthDots: number;
+  heightDots: number;
+  layoutBox: [number, number, number, number];
+  sel: GridSel;
+  onSel: (s: GridSel) => void;
+}) {
   return (
     <>
-      {gridBoxes(grid, widthDots, heightDots).map((b) => {
+      {gridBoxes(grid, widthDots, heightDots, layoutBox).map((b) => {
         const on = sel?.row === b.row && sel.cell === b.cell;
         return (
           <button

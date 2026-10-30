@@ -1,9 +1,10 @@
-import { Building2, Hash, ListPlus, Printer, Ruler, Users, type LucideIcon } from "lucide-react";
+import { Building2, Hash, ListPlus, Palette, Printer, Ruler, Users, type LucideIcon } from "lucide-react";
 import { NavLink, Navigate, useParams } from "react-router";
 import { Page } from "../../app/Shell";
 import { usePage } from "../../app/page";
 import { FieldsTab } from "./FieldsTab";
 import { GeneralTab, SerialTab } from "./GeneralTabs";
+import { LabelStyleTab } from "./LabelStyleTab";
 import { PrintersTab } from "./PrintersTab";
 import { SizesTab } from "./SizesTab";
 import { UsersTab } from "./UsersTab";
@@ -12,6 +13,7 @@ const TABS: { slug: string; label: string; icon: LucideIcon; hint: string; el: R
   { slug: "general", label: "General", icon: Building2, hint: "Your company name", el: <GeneralTab /> },
   { slug: "serial-numbers", label: "Serial numbers", icon: Hash, hint: "Format and the next number", el: <SerialTab /> },
   { slug: "label-sizes", label: "Label sizes", icon: Ruler, hint: "The label rolls you use", el: <SizesTab /> },
+  { slug: "label-style", label: "Label style", icon: Palette, hint: "One look for every label", el: <LabelStyleTab /> },
   { slug: "custom-fields", label: "Custom fields", icon: ListPlus, hint: "Extra details stored on parts", el: <FieldsTab /> },
   { slug: "printers", label: "Printers", icon: Printer, hint: "The printer and its print agent", el: <PrintersTab /> },
   { slug: "users", label: "Users", icon: Users, hint: "Who can sign in, and their role", el: <UsersTab /> },

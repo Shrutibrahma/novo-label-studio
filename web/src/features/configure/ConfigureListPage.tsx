@@ -6,7 +6,7 @@ import { Page } from "../../app/Shell";
 import { usePage } from "../../app/page";
 import { Button } from "../../components/Button";
 import { Banner, Card, Mono } from "../../components/Display";
-import { Field, Input, Select } from "../../components/Form";
+import { Field, Input, SegmentedControl, Select } from "../../components/Form";
 import { ConfirmDialog, Dialog } from "../../components/Overlay";
 import { useToast } from "../../components/Toast";
 import { LAYOUT_NAME, labelTypesKey, setCurrentLabelType, useLabelTypes, type LabelType } from "../../lib/labelTypes";
@@ -51,7 +51,11 @@ export function ConfigureListPage() {
   const first = useFirstActivePart();
   const custom = useCustomFields();
   const def = configs.data?.default;
-  const preview = usePreview(def && first.data ? { part_id: first.data.id, config_id: def.id, label_type_id: selected?.id } : null, 0);
+  const quick = selected?.kind === "quick";
+  const preview = usePreview(
+    def && quick ? { config_id: def.id, label_type_id: selected?.id } : def && first.data ? { part_id: first.data.id, config_id: def.id, label_type_id: selected?.id } : null,
+    0,
+  );
   const customLabels = Object.fromEntries((custom.data ?? []).map((f) => [f.key, f.label]));
 
   return (
@@ -59,10 +63,13 @@ export function ConfigureListPage() {
       {configs.error && <Banner tone="danger">{configs.error.message}</Banner>}
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <span className="mr-1 t-body-strong text-text">Label types</span>
-        <div role="tablist" aria-label="Label types" className="flex flex-wrap gap-1.5">
-          {(types.data ?? []).map((t) => {
+        <div role="tablist" aria-label="Label types" className="flex flex-wrap items-center gap-1.5">
+          {[...(types.data ?? []).filter((t) => t.kind === "part"), ...(types.data ?? []).filter((t) => t.kind === "quick")].map((t, i, all) => {
             const on = t.id === selected?.id;
+            const firstQuick = t.kind === "quick" && all[i - 1]?.kind !== "quick";
             return (
+              <span key={t.id} className="contents">
+              {firstQuick && <span className="ml-3 mr-1 t-body-strong text-text">Quick labels</span>}
               <button
                 key={t.id}
                 type="button"
@@ -76,6 +83,7 @@ export function ConfigureListPage() {
                   {sizeText(t.size)} · {LAYOUT_NAME[t.layout]}
                 </span>
               </button>
+              </span>
             );
           })}
         </div>
@@ -100,7 +108,7 @@ export function ConfigureListPage() {
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <h2 className="t-h2 text-text">{(types.data?.length ?? 0) > 1 && selected ? `${selected.name} label` : "Default label"}</h2>
-          <p className="t-small text-text-muted">Used for every part unless a part has its own version (below).</p>
+          <p className="t-small text-text-muted">{quick ? "Printed without a part, from Print Labels → Quick label." : "Used for every part unless a part has its own version (below)."}</p>
           {def && (
             <>
               <p className="t-body text-text">
@@ -122,6 +130,7 @@ export function ConfigureListPage() {
         </div>
       </Card>
 
+      {!quick && (<>
       <h2 className="mt-8 mb-4 t-h2 text-text">Parts with their own version</h2>
       {configs.data && configs.data.overrides.length === 0 ? (
         <p className="t-body text-text-secondary">No part has its own version yet. Every part prints with the design above.</p>
@@ -157,6 +166,7 @@ export function ConfigureListPage() {
           </tbody>
         </Table>
       )}
+      </>)}
 
       <TypeDialog
         open={dialog === "new" || dialog === "rename"}
@@ -212,6 +222,7 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
 }) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<"part" | "quick">("part");
   const [copyFrom, setCopyFrom] = useState("");
   const presets = useQuery({ queryKey: ["label-type-presets"], queryFn: () => api<Preset[]>("/label-types/presets"), enabled: open && mode === "new", staleTime: Infinity });
   const [error, setError] = useState<string | null>(null);
@@ -222,6 +233,7 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
     setOpenedFor(key);
     setName(mode === "rename" ? (current?.name ?? "") : "");
     setTitle(mode === "rename" ? (current?.title ?? "") : "");
+    setKind("part");
     setCopyFrom(current?.id ?? types[0]?.id ?? "");
     setError(null);
   }
@@ -234,8 +246,8 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
           ? await api<LabelType>(`/label-types/${current.id}`, { method: "PATCH", body: { name, title: title.trim() || null } })
           : await api<LabelType>("/label-types", {
               body: copyFrom.startsWith("preset:")
-                ? { name, title: title.trim() || null, preset: copyFrom.slice(7) }
-                : { name, title: title.trim() || null, copy_from_type_id: copyFrom || null },
+                ? { name, kind, title: title.trim() || null, preset: copyFrom.slice(7) }
+                : { name, kind, title: title.trim() || null, copy_from_type_id: copyFrom || null },
             });
       if (mode === "new") setCurrentLabelType(t.id);
       onSaved(t);
@@ -269,14 +281,34 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
           <Input id="type-title" maxLength={24} placeholder={name.trim().toUpperCase()} className="uppercase" value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
         {mode === "new" && (
+          <div className="flex flex-col gap-1.5">
+            <span className="t-body-strong text-text">Kind</span>
+            <SegmentedControl
+              ariaLabel="Kind"
+              value={kind}
+              onChange={(k: "part" | "quick") => {
+                setKind(k);
+                const firstOfKind = (presets.data ?? []).find((p) => p.kind === k);
+                if (k === "quick" && firstOfKind && !name.trim()) setName(firstOfKind.name);
+                setCopyFrom(k === "quick" ? (firstOfKind ? `preset:${firstOfKind.key}` : "") : (current?.kind === "part" ? current.id : types.find((t) => t.kind === "part")?.id ?? ""));
+              }}
+              options={[
+                { value: "part", label: "Part label" },
+                { value: "quick", label: "Quick label (no part)" },
+              ]}
+            />
+            <span className="t-caption text-text-muted">Chosen once: a type can't change kind later.</span>
+          </div>
+        )}
+        {mode === "new" && (
           <Field label="Start from" htmlFor="type-copy">
             <Select
               id="type-copy"
               value={copyFrom}
               options={[]}
               groups={[
-                { label: "Presets", options: (presets.data ?? []).map((p) => ({ value: `preset:${p.key}`, label: `${p.name} (${p.size_name})` })) },
-                { label: "Copy an existing type", options: types.map((t) => ({ value: t.id, label: `${t.name} (${sizeText(t.size)})` })) },
+                { label: "Presets", options: (presets.data ?? []).filter((p) => p.kind === kind).map((p) => ({ value: `preset:${p.key}`, label: `${p.name} (${p.size_name})` })) },
+                { label: "Copy an existing type", options: types.filter((t) => t.kind === kind).map((t) => ({ value: t.id, label: `${t.name} (${sizeText(t.size)})` })) },
               ]}
               onChange={(e) => {
                 const v = e.target.value;

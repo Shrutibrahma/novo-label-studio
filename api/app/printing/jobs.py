@@ -30,7 +30,7 @@ CANCELLED_REASON = "Cancelled before printing"
 class JobLabelOut(BaseModel):
     id: str
     seq_in_job: int
-    part_id: str
+    part_id: str | None  # None: quick label
     serial_value: str | None
     group_index: int | None
     copies: int
@@ -57,7 +57,7 @@ async def job_out(db: DB, job: PrintJob) -> JobOut:
         id=str(job.id), kind=job.kind, status=job.status, error=job.error, printer_id=str(job.printer_id),
         request_id=str(job.request_id) if job.request_id else None, created_at=job.created_at,
         claimed_at=job.claimed_at, sent_at=job.sent_at, finished_at=job.finished_at,
-        labels=[JobLabelOut(id=str(pl.id), seq_in_job=pl.seq_in_job, part_id=str(pl.part_id),
+        labels=[JobLabelOut(id=str(pl.id), seq_in_job=pl.seq_in_job, part_id=str(pl.part_id) if pl.part_id else None,
                             serial_value=pl.serial_value, group_index=pl.group_index, copies=pl.copies)
                 for pl in labels],
     )

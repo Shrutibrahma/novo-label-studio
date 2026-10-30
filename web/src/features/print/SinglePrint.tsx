@@ -9,7 +9,7 @@ import { api } from "../../lib/api";
 import { centeredOnRoll, fitsOnRoll, inches } from "../../lib/format";
 import { qk, useDefaultPrinter, useSizes } from "../../lib/queries";
 import { useCustomFields, type LabelSpec, type PartDetail, type SpecField } from "../../lib/parts";
-import { useLabelTypes } from "../../lib/labelTypes";
+import { usePartTypes } from "../../lib/labelTypes";
 import { useIsAdmin } from "../../app/auth";
 import { defaultRole, fieldName } from "../configure/types";
 import { printBlock } from "./blocking";
@@ -64,7 +64,7 @@ export function SinglePrint({ part, printAs, onType, onClose }: {
   const [saved, setSaved] = useState(false);
   const runner = usePrintRunner();
   const isAdmin = useIsAdmin();
-  const types = useLabelTypes();
+  const types = usePartTypes();
   const typeId = cfg.label_type_id;
   const typeName = cfg.label_type_name;
   const isPreferred = part.preferred_label_type_id === typeId;

@@ -79,7 +79,12 @@ export function ConfigEditorPage() {
   const dirty = draft !== null && JSON.stringify(draft) !== initial;
   const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && !allowLeave.current && currentLocation.pathname !== nextLocation.pathname);
 
-  const preview = usePreview(draft && previewPart ? { part_id: previewPart.id, config: draft, label_type_id: base.data?.label_type_id } : null, 250);
+  // A quick label (v1.1 D24) has no part: it previews with its print-time fields empty.
+  const quick = labelType?.kind === "quick";
+  const preview = usePreview(
+    draft && (quick || previewPart) ? { part_id: quick ? undefined : previewPart?.id, config: draft, label_type_id: base.data?.label_type_id } : null,
+    250,
+  );
   const shownWarnings = useMemo(() => (preview.data?.warnings ?? []).filter((w) => !EDITOR_IGNORED.has(w.code)), [preview.data]);
   const fits = preview.data !== undefined && shownWarnings.length === 0;
 
@@ -146,6 +151,7 @@ export function ConfigEditorPage() {
           <Section title="Size" step={1} icon={Ruler} hint="The label roll loaded in the printer">
             <SizeSection sizes={(sizes.data ?? []).filter((s) => s.active)} value={draft.label_size_id} onChange={(id) => setDraft({ ...draft, label_size_id: id })} />
           </Section>
+          {!quick && (
           <Section title="Layout" step={2} icon={Grid2x2} hint="Text lines, or a boxed bin-label grid">
             <LayoutSection
               value={isGrid ? "grid" : "lines"}
@@ -162,6 +168,7 @@ export function ConfigEditorPage() {
               }}
             />
           </Section>
+          )}
           {isGrid ? (
             <Section title="Rows & boxes" step={3} icon={LayoutList} hint="Add rows, split them into boxes, pick what each box shows">
               <GridBuilder
@@ -169,6 +176,7 @@ export function ConfigEditorPage() {
                 onSel={setGridSel}
                 draft={draft}
                 custom={custom.data ?? []}
+                quick={quick}
                 onChange={(grid, patch) => setDraft({ ...draft, ...patch, spec: { ...draft.spec, grid } })}
                 onManualFields={(manual_fields, grid) => setDraft({ ...draft, spec: { ...draft.spec, manual_fields, grid } })}
                 boxSize={(row, cell) => {
@@ -183,6 +191,7 @@ export function ConfigEditorPage() {
               <FieldsSection draft={draft} custom={custom.data ?? []} onFields={(fields) => setDraft({ ...draft, spec: { ...draft.spec, fields } })} />
             </Section>
           )}
+          {!quick && (<>
           <Section title="Picture" step={4} icon={ImageIcon} hint="Put the part's photo on the label">
             <PictureSection draft={draft} onChange={setStyle} />
           </Section>
@@ -192,6 +201,7 @@ export function ConfigEditorPage() {
               onChange={(patch, style) => setDraft({ ...draft, ...patch, spec: style ? { ...draft.spec, style: { ...draft.spec.style, ...style } } : draft.spec })}
             />
           </Section>
+          </>)}
           <Section title="Style" step={6} icon={Palette} hint={isGrid ? "Font and frame" : "Text size and spacing"}>
             <StyleSection style={draft.spec.style} onChange={setStyle} />
           </Section>
@@ -216,7 +226,7 @@ export function ConfigEditorPage() {
                 </span>
               )}
             </div>
-            <PartPicker value={previewPart} onChange={setPreviewPart} />
+            {quick ? <p className="t-small text-text-muted">A quick label has no part: print-time values are typed in when printing.</p> : <PartPicker value={previewPart} onChange={setPreviewPart} />}
           </div>
           <LabelPreview
             result={preview.data}

@@ -31,8 +31,8 @@ export function HistoryDrawer({ labelId, onClose, onOpen }: { labelId: string | 
       header={
         d ? (
           <div>
-            <h2 className="t-h2 text-text">{d.row.label_name ?? d.row.part_name ?? d.row.part_number}</h2>
-            <Mono className="t-body text-text-secondary">{d.row.part_number}</Mono>
+            <h2 className="t-h2 text-text">{d.row.quick ? `Quick label · ${d.row.label_type}` : (d.row.label_name ?? d.row.part_name ?? d.row.part_number)}</h2>
+            {!d.row.quick && <Mono className="t-body text-text-secondary">{d.row.part_number}</Mono>}
             <div className="mt-2 flex gap-2">
               <span className="inline-flex h-[22px] items-center rounded-full bg-primary-subtle px-2 t-caption text-primary">{d.row.label_type} label · {d.row.size}</span>
               <Badge tone={JOB_STATUS_TONE[d.row.status]}>{JOB_STATUS_WORD[d.row.status]}</Badge>

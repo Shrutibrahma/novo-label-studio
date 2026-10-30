@@ -207,6 +207,7 @@ class LabelType(Base):
     id: Mapped[uuid.UUID] = _pk()
     name: Mapped[str] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(Text)  # printed in the title band; NULL = the name (migration 0005)
+    kind: Mapped[str] = mapped_column(Text, server_default=DB_DEFAULT)  # part | quick (migration 0007)
     sort_order: Mapped[int] = mapped_column(Integer, server_default=DB_DEFAULT)
     archived: Mapped[bool] = mapped_column(Boolean, server_default=DB_DEFAULT)
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("app_user.id"))
@@ -324,7 +325,7 @@ class PrintedLabel(Base):
     id: Mapped[uuid.UUID] = _pk()
     job_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("print_job.id"))
     seq_in_job: Mapped[int] = mapped_column(Integer)
-    part_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("part.id"))
+    part_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("part.id"))  # None: quick label
     label_config_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("label_config.id"))
     serial_value: Mapped[str | None] = mapped_column(Text, ForeignKey("issued_serial.value"))
     group_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("label_group.id"))

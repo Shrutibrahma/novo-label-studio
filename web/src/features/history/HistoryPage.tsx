@@ -47,6 +47,7 @@ export function HistoryPage() {
   const [to, setTo] = useState("");
   const [user, setUser] = useState("");
   const [reprintsOnly, setReprintsOnly] = useState(false);
+  const [quickOnly, setQuickOnly] = useState(false);
   const [reprintFor, setReprintFor] = useState<HistoryRow | null>(null);
   const openId = search.get("label");
   const open = (id: string | null) => {
@@ -62,8 +63,9 @@ export function HistoryPage() {
     if (dq) p.q = dq;
     if (user) p.user_id = user;
     if (reprintsOnly) p.reprints_only = "true";
+    if (quickOnly) p.quick_only = "true";
     return p;
-  }, [dq, range, from, to, user, reprintsOnly]);
+  }, [dq, range, from, to, user, reprintsOnly, quickOnly]);
 
   const rows = useInfiniteQuery({
     queryKey: ["history", params],
@@ -119,6 +121,7 @@ export function HistoryPage() {
           options={[{ value: "", label: "Printed by" }, ...(people.data ?? []).map((p) => ({ value: p.id, label: p.display_name }))]}
         />
         <Switch label="Reprints only" checked={reprintsOnly} onChange={setReprintsOnly} />
+        <Switch label="Quick labels" checked={quickOnly} onChange={setQuickOnly} />
       </div>
 
       <div className="mt-6">
@@ -149,8 +152,14 @@ export function HistoryPage() {
                   <Tr key={r.id} onClick={() => open(r.id)} selected={r.id === openId}>
                     <Td className="whitespace-nowrap">{formatDateTime(r.created_at)}</Td>
                     <Td>
-                      <div className="t-body-strong text-text">{r.label_name ?? r.part_name}</div>
-                      <Mono className="t-small">{r.part_number}</Mono>
+                      {r.quick ? (
+                        <div className="t-body-strong text-text">Quick label · {r.label_type}</div>
+                      ) : (
+                        <>
+                          <div className="t-body-strong text-text">{r.label_name ?? r.part_name}</div>
+                          <Mono className="t-small">{r.part_number}</Mono>
+                        </>
+                      )}
                     </Td>
                     <Td>{r.serial ? <Mono className="text-text">{r.serial}</Mono> : "—"}</Td>
                     <Td className="tabular-nums">{r.box ?? "—"}</Td>

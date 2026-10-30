@@ -97,7 +97,7 @@ def box_text(noun: str, value: Any) -> str:
 
 
 def field_value(f: SpecField, spec: LabelSpec, snapshot: dict[str, Any]) -> str:
-    part = snapshot.get("part", {})
+    part = snapshot.get("part") or {}  # None on a quick label
     manual = snapshot.get("manual", {})
     generated = snapshot.get("generated", {})
     if f.key in ("serial", "print_date"):

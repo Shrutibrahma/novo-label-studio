@@ -46,7 +46,8 @@ ReprintReason = Literal["damaged", "missing", "print_issue", "other"]
 class HistoryRow(BaseModel):
     id: str
     created_at: datetime
-    part_id: str
+    part_id: str | None  # None: quick label (v1.1 D24)
+    quick: bool
     part_number: str
     label_name: str | None
     part_name: str | None
@@ -138,7 +139,7 @@ SELECT pl.id, pl.created_at, pl.part_id, p.part_number AS current_number, pl.sna
        ln.alias AS current_label, lt.name AS label_type
   FROM printed_label pl
   JOIN print_job j ON j.id = pl.job_id
-  JOIN part p ON p.id = pl.part_id
+  LEFT JOIN part p ON p.id = pl.part_id
   JOIN label_config c ON c.id = pl.label_config_id
   JOIN label_size s ON s.id = c.label_size_id
   JOIN label_type lt ON lt.id = c.label_type_id
@@ -154,10 +155,10 @@ def _inches(v: Any) -> str:
 
 def history_row(r: Any) -> HistoryRow:
     snap = r.snapshot or {}
-    part = snap.get("part", {})
+    part = snap.get("part") or {}
     return HistoryRow(
-        id=str(r.id), created_at=r.created_at, part_id=str(r.part_id),
-        part_number=str(part.get("part_number") or r.current_number),
+        id=str(r.id), created_at=r.created_at, part_id=str(r.part_id) if r.part_id else None,
+        quick=r.part_id is None, part_number=str(part.get("part_number") or r.current_number or ""),
         label_name=part.get("label_name") or r.current_label, part_name=part.get("part_name") or r.current_name,
         serial=r.serial_value, box=f"{r.group_index}/{r.group_total}" if r.group_index else None,
         size=f"{_inches(r.width_in)} × {_inches(r.height_in)} in", size_name=r.size_name, copies=r.copies, by=r.by,
@@ -179,6 +180,7 @@ async def list_history(
     to: datetime | None = None,
     user_id: uuid.UUID | None = None,
     reprints_only: bool = False,
+    quick_only: bool = False,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     cursor: str | None = None,
 ) -> HistoryPage:
@@ -205,6 +207,8 @@ async def list_history(
         params["user"] = user_id
     if reprints_only:
         where.append("pl.reprint_of IS NOT NULL")
+    if quick_only:
+        where.append("pl.part_id IS NULL")
     if cursor:
         try:
             c = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
@@ -266,7 +270,7 @@ async def label_detail(label_id: uuid.UUID, _: AnyUser, db: DB) -> LabelDetail:
     spec = parse_spec(cfg.spec)
     labels = field_labels(spec, ctx_labels) | CORE_LABELS
     fields: list[SnapshotField] = []
-    for k, v in label.snapshot.get("part", {}).items():
+    for k, v in (label.snapshot.get("part") or {}).items():
         shown = "Printed" if k == "image_asset_id" else _display(v)
         fields.append(SnapshotField(key=k, label=labels.get(k, k), value=shown))
     for k, v in label.snapshot.get("manual", {}).items():

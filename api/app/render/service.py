@@ -21,7 +21,7 @@ from app.models import AppSetting, Asset, CustomFieldDef, LabelSize, LabelType, 
 from app.render.engine import RenderConfig, RenderPrinter, RenderResult, RenderSize, render
 from app.render.house import HouseStyle, snapshot_style
 from app.settings.router import house_style
-from app.render.snapshot import build_snapshot, clean_manual, field_labels, part_field_values
+from app.render.snapshot import build_snapshot, clean_manual, field_labels, part_field_values, quick_snapshot
 
 
 @dataclass
@@ -115,6 +115,20 @@ def render_snapshot(snapshot: dict[str, Any], spec: LabelSpec, qr_mode: str, siz
     return render(snapshot, RenderConfig(spec=spec, qr_mode=qr_mode, field_labels=labels),
                   RenderSize(width_in=size.width_in, height_in=size.height_in),
                   RenderPrinter(dpi=printer.dpi, print_width_in=printer.print_width_in), snapshot_picture(snapshot))
+
+
+async def render_quick(db: AsyncSession, ctx: RenderContext, label_type: LabelType, cfg: ConfigLike,
+                       manual_values: dict[str, Any] | None, print_date: str, house: HouseStyle | None = None
+                       ) -> tuple[RenderResult, dict[str, Any], LabelSpec, LabelSize]:
+    """A quick label of `label_type` (no part)."""
+    spec = parse_spec(cfg.spec)
+    size = await db.get(LabelSize, cfg.label_size_id)
+    if size is None:
+        raise ApiError("NOT_FOUND")
+    labels = field_labels(spec, ctx.custom_labels)
+    snapshot = quick_snapshot(clean_manual(spec, manual_values, labels), print_date,
+                              house_snapshot(ctx, label_type, spec, house))
+    return render_snapshot(snapshot, spec, "none", size, ctx.printer, labels), snapshot, spec, size
 
 
 async def render_part(db: AsyncSession, ctx: RenderContext, part: Part, cfg: ConfigLike,

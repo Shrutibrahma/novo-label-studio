@@ -399,3 +399,20 @@ Decisions for `SPEC.md` v1.1 (addendum of 2026-10-30) that the addendum left ope
      layout box) and shows "QR box isn't square; the code will be smaller." Presets themselves are checked by
      `test_presets_follow_the_look_rules` (one xl box at most, headings uppercase, ≤ 14 characters); the builder
      doesn't block other designs.
+120. **Quick label types.** `label_type.kind` (`part` / `quick`, migration 0007) is chosen in the New label type
+     dialog ("Kind": "Part label" / "Quick label (no part)") and never changes. A quick type starts from a quick
+     preset (Workstation sign) or a copy of another quick type; the server re-checks the 7.2 rules
+     (`QUICK_LABEL_INVALID`) on create and on every publish, and refuses per-part versions of a quick type.
+121. **Parts never print as a quick type.** "First type" means the first *part* type; preferred, last printed and
+     "Print as" only consider part types; saving a quick type as a part's preferred type, or printing a part as
+     one, is `QUICK_LABEL_INVALID`. The last part type can't be archived; quick types always can.
+122. **`POST /print/quick`** uses the same printer, loaded-size and fit rules as `/print`; its print_request kind
+     is `print` and its printed label has no part, no serial, no QR (`generated.quick: true`, `part: null`).
+     Preview takes `label_type_id` without `part_id` for quick types. The Configure editor for a quick type has no
+     part picker and no Layout, Picture or QR sections, and its box fields are print-time fields and the date.
+123. **History.** The "Quick labels" filter is a switch next to "Reprints only" (History's filters are switches,
+     not chips); `GET /history?quick_only=true`. Rows and the drawer read "Quick label · {type}"; the drawer lists
+     the print-time values.
+124. **Migration 0007 down** only works while no quick label has been printed (part_id must be NOT NULL again).
+125. **Label style family preview** of a quick type fills its print-time fields with their own names (e.g. a
+     Station box shows "Station"), as 4.5 asks.

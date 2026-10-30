@@ -518,7 +518,8 @@ async def update_part(part_id: uuid.UUID, body: PartPatch, user: Admin, db: DB,
         part.custom_data = apply_custom(defs, part.custom_data, body.custom_data, is_new=False)
     if "preferred_label_type_id" in body.model_fields_set:
         if body.preferred_label_type_id is not None:
-            await resolve_type(db, body.preferred_label_type_id)  # an active type, else NOT_FOUND
+            if (await resolve_type(db, body.preferred_label_type_id)).kind == "quick":  # active, else NOT_FOUND
+                raise ApiError("QUICK_LABEL_INVALID")
         part.preferred_label_type_id = body.preferred_label_type_id
     after = snapshot(part)
     if after != before:

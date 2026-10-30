@@ -256,9 +256,11 @@ export function GridOverlay({ grid, widthDots, heightDots, layoutBox, sel, onSel
   );
 }
 
-export function GridBuilder({ draft, custom, onChange, onManualFields, sel: selProp, onSel, boxSize }: {
+export function GridBuilder({ draft, custom, quick = false, onChange, onManualFields, sel: selProp, onSel, boxSize }: {
   draft: Draft;
   custom: CustomField[];
+  /** A quick label (no part): only print-time fields and the print date, no QR or photo boxes. */
+  quick?: boolean;
   onChange: (grid: GridLayout, patch?: Partial<Draft>) => void;
   onManualFields: (manual: ManualField[], grid: GridLayout) => void;
   /** A box's size in dots on the current label size (from the preview), for the square-QR nudge. */
@@ -301,9 +303,9 @@ export function GridBuilder({ draft, custom, onChange, onManualFields, sel: selP
 
   const fieldOptions = [
     { value: "", label: "— Pick a field —" },
-    ...PART_FIELD_KEYS.map((k) => ({ value: k, label: CORE_FIELD_LABELS[k]! })),
-    ...custom.filter((f) => f.printable).map((f) => ({ value: f.key, label: f.label })),
-    ...GENERATED_KEYS.map((k) => ({ value: k, label: CORE_FIELD_LABELS[k]! })),
+    ...(quick ? [] : PART_FIELD_KEYS.map((k) => ({ value: k, label: CORE_FIELD_LABELS[k]! }))),
+    ...(quick ? [] : custom.filter((f) => f.printable).map((f) => ({ value: f.key, label: f.label }))),
+    ...GENERATED_KEYS.filter((k) => !quick || k === "print_date").map((k) => ({ value: k, label: CORE_FIELD_LABELS[k]! })),
     ...draft.spec.manual_fields.map((m) => ({ value: `manual.${m.key}`, label: `${m.label} (typed at print)` })),
   ];
   const selected = sel ? grid.rows[sel.row]?.cells[sel.cell] : undefined;
@@ -420,8 +422,7 @@ export function GridBuilder({ draft, custom, onChange, onManualFields, sel: selP
                   options={[
                     { value: "field", label: "Field" },
                     { value: "text", label: "Text" },
-                    { value: "qr", label: "QR" },
-                    { value: "image", label: "Photo" },
+                    ...(quick ? [] : [{ value: "qr" as const, label: "QR" }, { value: "image" as const, label: "Photo" }]),
                     { value: "blank", label: "Write-in" },
                     { value: "arrow", label: "Arrow" },
                   ]}

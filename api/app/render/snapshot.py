@@ -133,6 +133,13 @@ def clean_manual(spec: LabelSpec, values: dict[str, Any] | None, labels: dict[st
     return out
 
 
+def quick_snapshot(manual: dict[str, Any], print_date: str, house: dict[str, Any]) -> dict[str, Any]:
+    """A quick label (v1.1 D24): no part, no serial, no QR; only print-time values and the print date."""
+    return {"part": None, "manual": manual,
+            "generated": {"print_date": print_date, "renderer_version": renderer_version(), "quick": True,
+                          "house_style": house}}
+
+
 def build_snapshot(spec: LabelSpec, qr_mode: str, part_values: dict[str, Any], custom_keys: set[str],
                    manual: dict[str, Any], serial: str | None, print_date: str,
                    labels: dict[str, str] | None = None, house: dict[str, Any] | None = None) -> dict[str, Any]:

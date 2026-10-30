@@ -13,13 +13,14 @@ from app.models import LabelConfig, LabelType
 
 
 async def resolve_type(db: AsyncSession, type_id: uuid.UUID | None = None) -> LabelType:
-    """The given (active) label type, or the first one when none is given."""
+    """The given (active) label type, or the first part label type when none is given (quick labels have no
+    part, so they are never a part's default)."""
     if type_id is not None:
         t = await db.get(LabelType, type_id)
         if t is None or t.archived:
             raise ApiError("NOT_FOUND")
         return t
-    t = (await db.execute(select(LabelType).where(LabelType.archived.is_(False))
+    t = (await db.execute(select(LabelType).where(LabelType.archived.is_(False), LabelType.kind == "part")
                           .order_by(LabelType.sort_order, LabelType.created_at).limit(1))).scalar_one_or_none()
     if t is None:
         raise ApiError("NOT_FOUND")
@@ -38,6 +39,8 @@ async def current_default(db: AsyncSession, type_id: uuid.UUID | None = None) ->
 async def current_override(db: AsyncSession, part_id: uuid.UUID, type_id: uuid.UUID | None = None
                            ) -> LabelConfig | None:
     t = await resolve_type(db, type_id)
+    if t.kind == "quick":
+        raise ApiError("QUICK_LABEL_INVALID")  # a quick label is never printed for a part
     return (await db.execute(select(LabelConfig).where(LabelConfig.label_type_id == t.id, LabelConfig.scope == "part",
                                                        LabelConfig.part_id == part_id,
                                                        LabelConfig.is_current.is_(True)))).scalar_one_or_none()

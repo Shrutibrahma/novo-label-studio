@@ -3,7 +3,9 @@ import type { JobStatus } from "../../lib/status";
 export interface HistoryRow {
   id: string;
   created_at: string;
-  part_id: string;
+  /** null: a quick label (no part). */
+  part_id: string | null;
+  quick: boolean;
   part_number: string;
   label_name: string | null;
   part_name: string | null;

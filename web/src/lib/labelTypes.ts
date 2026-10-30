@@ -8,6 +8,8 @@ import { qk } from "./queries";
 export interface LabelType {
   id: string;
   name: string;
+  /** "quick": printed without a part (v1.1 D24). */
+  kind: "part" | "quick";
   /** Printed in the title band; null = the name. */
   title: string | null;
   sort_order: number;
@@ -23,6 +25,12 @@ export const labelTypesKey = ["label-types"] as const;
 
 export function useLabelTypes() {
   return useQuery({ queryKey: labelTypesKey, queryFn: () => api<LabelType[]>("/label-types"), staleTime: 30_000 });
+}
+
+/** Label types parts print as (quick labels have no part). */
+export function usePartTypes() {
+  const types = useLabelTypes();
+  return { ...types, data: types.data?.filter((t) => t.kind === "part") };
 }
 
 export const LAYOUT_NAME: Record<LabelType["layout"], string> = { lines: "Lines", grid: "Rows & boxes", bin: "Bin card" };
@@ -53,7 +61,7 @@ let memory: string | null = null;
 
 /** The label type to print with: the remembered one if it still exists, else the first type. */
 export function useCurrentLabelType(): LabelType | undefined {
-  const types = useLabelTypes();
+  const types = usePartTypes();
   const stored = useSyncExternalStore(
     (cb) => {
       listeners.add(cb);

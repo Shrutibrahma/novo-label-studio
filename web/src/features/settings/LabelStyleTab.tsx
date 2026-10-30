@@ -91,7 +91,19 @@ export function LabelStyleTab() {
 }
 
 function FamilyPreview({ type, partId, style }: { type: LabelType; partId: string; style: HouseStyle }) {
-  const preview = usePreview({ part_id: partId, config_id: type.default_config_id, label_type_id: type.id, house_style: style }, 250);
+  // Quick labels have no part: their print-time fields show their own names as sample values.
+  const quickSample = useQuery({
+    queryKey: ["config", "quick-sample", type.default_config_id],
+    queryFn: () => api<{ spec: { manual_fields: { key: string; label: string; type: string }[] } }>(`/configs/default?type_id=${type.id}`),
+    enabled: type.kind === "quick",
+    select: (c) => Object.fromEntries(c.spec.manual_fields.filter((m) => m.type !== "box_sequence").map((m) => [m.key, m.label])),
+  });
+  const preview = usePreview(
+    type.kind === "quick"
+      ? quickSample.data ? { config_id: type.default_config_id, label_type_id: type.id, house_style: style, manual_values: quickSample.data } : null
+      : { part_id: partId, config_id: type.default_config_id, label_type_id: type.id, house_style: style },
+    250,
+  );
   return (
     <figure className="flex flex-col gap-2 rounded-[12px] border border-border bg-surface p-3 shadow-card">
       <LabelPreview result={preview.data} loading={preview.isFetching} maxHeight={260} showActualSizeToggle={false} padding={12} />

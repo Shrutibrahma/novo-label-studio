@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import audit
 from app.auth.deps import DB, Admin, AnyUser
 from app.configs.effective import current_default, current_override, effective_config, resolve_type
-from app.configs.spec import LabelSpec, SpecField, parse_spec, validate_spec
+from app.configs.spec import LabelSpec, SpecField, parse_spec, validate_quick, validate_spec
 from app.errors import ApiError
 from app.models import (
     AppUser,
@@ -129,6 +129,10 @@ async def publish(db: AsyncSession, user_id: uuid.UUID, scope: str, part_id: uui
     type; the previous current version is retired (D11)."""
     await active_size(db, size_id)
     label_type = await resolve_type(db, type_id)
+    if label_type.kind == "quick":
+        if scope != "default":
+            raise ApiError("QUICK_LABEL_INVALID")  # no per-part versions of a quick label
+        validate_quick(spec, qr_mode, serial_mode)
     seq_id = None
     if serial_mode == "required":
         seq_id = (await db.execute(select(SerialSequence.id).where(SerialSequence.name == "Default"))).scalar_one()

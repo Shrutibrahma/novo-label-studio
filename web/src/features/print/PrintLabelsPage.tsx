@@ -1,5 +1,5 @@
-import { setCurrentLabelType, useCurrentLabelType, useLabelTypes } from "../../lib/labelTypes";
-import { Package } from "lucide-react";
+import { setCurrentLabelType, useCurrentLabelType, useLabelTypes, usePartTypes } from "../../lib/labelTypes";
+import { Package, StickyNote } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Page } from "../../app/Shell";
@@ -15,6 +15,7 @@ import { useDebounced, type LabelTypeRef, type PartListItem } from "../../lib/pa
 import { Tooltip } from "../../components/Tooltip";
 import { usePartsQuery, useSentinel, type PartsParams } from "../parts/usePartsQuery";
 import { PrintLaunchHost, PrintRowActions, type PrintLaunch } from "./PrintLaunch";
+import { QuickLabelDialog } from "./QuickLabelDialog";
 
 type Chip = "all" | "recent" | "out_of_date" | "never_printed";
 
@@ -45,6 +46,8 @@ export function PrintLabelsPage() {
   const [selected, setSelected] = useState<Map<string, PartListItem>>(new Map());
   const [launch, setLaunch] = useState<PrintLaunch | null>(null);
   const printAs = useCurrentLabelType()?.id;
+  const hasQuick = (useLabelTypes().data ?? []).some((t) => t.kind === "quick");
+  const [quickOpen, setQuickOpen] = useState(false);
 
   const params = useMemo<PartsParams>(() => ({ q: debouncedQ || undefined, status: "active", print_as: printAs, ...chipParams(chip) }), [debouncedQ, chip, printAs]);
   const query = usePartsQuery(params);
@@ -90,7 +93,16 @@ export function PrintLabelsPage() {
 
   return (
     <Page className="pb-28">
-      <LabelTypePicker />
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <LabelTypePicker />
+        </div>
+        {hasQuick && (
+          <Button variant="secondary" icon={StickyNote} onClick={() => setQuickOpen(true)}>
+            Quick label
+          </Button>
+        )}
+      </div>
       <SearchInput
         autoFocus
         placeholder="Search part number, label name or description"
@@ -202,6 +214,7 @@ export function PrintLabelsPage() {
       )}
 
       <PrintLaunchHost launch={launch} onClose={() => setLaunch(null)} onSwitch={setLaunch} />
+      {quickOpen && <QuickLabelDialog onClose={() => setQuickOpen(false)} />}
     </Page>
   );
 }
@@ -226,7 +239,7 @@ function TypeChip({ type }: { type: LabelTypeRef }) {
 
 /** "Print as": the label type for parts that have no saved or last-printed type (remembered on this computer). */
 function LabelTypePicker() {
-  const types = useLabelTypes();
+  const types = usePartTypes();
   const current = useCurrentLabelType();
   const list = types.data ?? [];
   if (list.length < 2) return null;

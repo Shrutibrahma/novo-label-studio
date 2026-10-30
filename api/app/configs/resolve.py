@@ -24,7 +24,7 @@ Reason = Literal["preferred", "last_printed", "print_as", "first"]
 _RESOLVE = text("""
 SELECT p.id AS part_id, pt.id AS preferred_id, lt.id AS last_id
   FROM part p
-  LEFT JOIN label_type pt ON pt.id = p.preferred_label_type_id AND NOT pt.archived
+  LEFT JOIN label_type pt ON pt.id = p.preferred_label_type_id AND NOT pt.archived AND pt.kind = 'part'
   LEFT JOIN LATERAL (
         SELECT c.label_type_id
           FROM printed_label pl
@@ -32,7 +32,7 @@ SELECT p.id AS part_id, pt.id AS preferred_id, lt.id AS last_id
          WHERE pl.part_id = p.id AND pl.reprint_of IS NULL
          ORDER BY pl.created_at DESC, pl.id DESC
          LIMIT 1) lp ON true
-  LEFT JOIN label_type lt ON lt.id = lp.label_type_id AND NOT lt.archived
+  LEFT JOIN label_type lt ON lt.id = lp.label_type_id AND NOT lt.archived AND lt.kind = 'part'
  WHERE p.id = ANY(:ids)
 """)
 
@@ -51,7 +51,7 @@ async def resolve_many(db: AsyncSession, part_ids: list[uuid.UUID], browser_choi
     fallback: Resolved | None = None
     if browser_choice_id is not None:
         chosen = await db.get(LabelType, browser_choice_id)
-        if chosen is not None and not chosen.archived:
+        if chosen is not None and not chosen.archived and chosen.kind == "part":
             fallback = Resolved(chosen, "print_as")
     out: dict[uuid.UUID, Resolved] = {}
     for r in rows:

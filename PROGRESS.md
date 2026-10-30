@@ -23,7 +23,7 @@ Decisions it left open: `OPEN_QUESTIONS.md` § v1.1 (#100–).
 | U1 House label style | done |
 | U2 Remember the type | done |
 | U3 Industrial presets + box options | done |
-| U4 Quick labels | not started |
+| U4 Quick labels | done |
 | U5 Operations | not started |
 
 See `README.md` for setup, running, tests and switching the agent to USB, and the hardware checks still to run.

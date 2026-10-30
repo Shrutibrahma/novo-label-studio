@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import audit
 from app.auth.deps import DB, AnyUser
-from app.configs.effective import effective_config
+from app.configs.effective import current_default, effective_config, resolve_type
 from app.configs.resolve import resolve_label_type
 from app.configs.spec import LabelSpec, ManualBox, parse_spec
 from app.errors import ApiError
@@ -33,7 +33,9 @@ from app.render.service import (
     label_name_of,
     part_values,
     preview_serial,
+    ConfigLike,
     render_context,
+    render_quick,
     render_snapshot,
     type_of,
 )
@@ -122,6 +124,8 @@ async def plan_items(db: AsyncSession, body: PrintIn, labels_for: dict[str, str]
         if part is None or part.status != "active":
             raise ApiError("NOT_FOUND")
         type_id = item.label_type_id or (await resolve_label_type(db, part.id, body.label_type_id))[0].id
+        if (await resolve_type(db, type_id)).kind == "quick":
+            raise ApiError("QUICK_LABEL_INVALID")
         cfg = await effective_config(db, part.id, type_id)
         spec = parse_spec(cfg.spec)
         size = await db.get(LabelSize, cfg.label_size_id)
@@ -155,11 +159,11 @@ def fits_on(label: LabelSize, roll: LabelSize) -> bool:
     return label.width_in <= roll.width_in and label.height_in <= roll.height_in
 
 
-async def check_loaded_size(db: AsyncSession, printer: Printer, planned: list[Planned], confirmed: bool,
+async def check_loaded_size(db: AsyncSession, printer: Printer, label_sizes: list[LabelSize], confirmed: bool,
                             user_id: uuid.UUID) -> None:
     """14.1: loaded size ≠ label size blocks printing until the operator confirms what is loaded. A label that fits
     on the loaded roll is fine: it prints centered on it (migration 0004)."""
-    sizes = {p.size.id: p.size for p in planned}
+    sizes = {s.id: s for s in label_sizes}
     roll = await db.get(LabelSize, printer.loaded_label_size_id) if printer.loaded_label_size_id else None
     mismatched = [s for sid, s in sizes.items() if sid != printer.loaded_label_size_id
                   and not (roll and fits_on(s, roll))]
@@ -192,21 +196,14 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
         return await request_out(db, prior)
 
     # The printer row is only locked when this request records a newly loaded size on it.
-    lock = body.loaded_size_confirmed
-    if body.printer_id:
-        printer = await db.get(Printer, body.printer_id, with_for_update=lock)
-    else:
-        q = select(Printer).where(Printer.is_default.is_(True))
-        printer = (await db.execute(q.with_for_update() if lock else q)).scalar_one_or_none()
-    if printer is None:
-        raise ApiError("NOT_FOUND")
+    printer = await chosen_printer(db, body.printer_id, body.loaded_size_confirmed)
     await assert_printer_ready(db, printer)
 
     if any(i.set_preferred is not None for i in body.items) and not user.is_admin:
         raise ApiError("FORBIDDEN")
     ctx = await render_context(db, printer)
     planned = await plan_items(db, body, ctx.custom_labels)
-    await check_loaded_size(db, printer, planned, body.loaded_size_confirmed, user.id)
+    await check_loaded_size(db, printer, [p.size for p in planned], body.loaded_size_confirmed, user.id)
     print_date = local_today(request_zone(request)).isoformat()
 
     # The house style each label is drawn with (v1.1 D21): one per label type in the request.
@@ -292,6 +289,69 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
     req.request_body = body.model_dump(mode="json") | {"group_ids": group_ids}
     await db.commit()
     await queue_jobs(db, job_ids)
+    return await request_out(db, req)
+
+
+class QuickIn(BaseModel):
+    printer_id: uuid.UUID | None = None
+    label_type_id: uuid.UUID
+    manual_values: dict[str, Any] = Field(default_factory=dict)
+    copies: int = Field(default=1, ge=1, le=50)
+    loaded_size_confirmed: bool = False
+
+
+async def chosen_printer(db: AsyncSession, printer_id: uuid.UUID | None, lock: bool) -> Printer:
+    if printer_id:
+        printer = await db.get(Printer, printer_id, with_for_update=lock)
+    else:
+        q = select(Printer).where(Printer.is_default.is_(True))
+        printer = (await db.execute(q.with_for_update() if lock else q)).scalar_one_or_none()
+    if printer is None:
+        raise ApiError("NOT_FOUND")
+    return printer
+
+
+@router.post("/print/quick", response_model=PrintOut)
+async def print_quick(body: QuickIn, request: Request, user: AnyUser, db: DB,
+                      idempotency_key: Annotated[str | None, Header()] = None) -> PrintOut:
+    """A quick label (v1.1 D24): no part, no serial, no QR; same printer and size rules as /print."""
+    key = parse_key(idempotency_key)
+    if (prior := await existing_request(db, key)) is not None:
+        return await request_out(db, prior)
+    printer = await chosen_printer(db, body.printer_id, body.loaded_size_confirmed)
+    await assert_printer_ready(db, printer)
+    label_type = await resolve_type(db, body.label_type_id)
+    if label_type.kind != "quick":
+        raise ApiError("QUICK_LABEL_INVALID")
+    cfg = await current_default(db, label_type.id)
+    ctx = await render_context(db, printer)
+    result, snap, _, size = await render_quick(
+        db, ctx, label_type, ConfigLike(cfg.label_size_id, cfg.spec, cfg.qr_mode, cfg.serial_mode, label_type.id),
+        body.manual_values, local_today(request_zone(request)).isoformat())
+    await check_loaded_size(db, printer, [size], body.loaded_size_confirmed, user.id)
+    if not result.fits:
+        raise _first_warning(result)
+    req = PrintRequest(idempotency_key=key, kind="print", request_body={}, created_by=user.id)
+    db.add(req)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        prior = await existing_request(db, key)
+        if prior is None:
+            raise
+        return await request_out(db, prior)
+    payload = await to_thread.run_sync(job_payload, [(result.png, body.copies)], await printer_settings(db, printer))
+    job = PrintJob(request_id=req.id, seq_in_request=1, printer_id=printer.id, kind="print", payload_zpl=payload,
+                   status="rendered", created_by=user.id)
+    db.add(job)
+    await db.flush()
+    db.add(PrintedLabel(job_id=job.id, seq_in_job=1, part_id=None, label_config_id=cfg.id, serial_value=None,
+                        copies=body.copies, snapshot=snap, qr_payload=None, dpi=printer.dpi, bitmap_png=result.png,
+                        bitmap_sha256=sha256(result.png)))
+    req.request_body = body.model_dump(mode="json") | {"group_ids": [None]}
+    await db.commit()
+    await queue_jobs(db, [job.id])
     return await request_out(db, req)
 
 

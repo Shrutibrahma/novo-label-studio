@@ -6,7 +6,7 @@ import { Badge, Banner, Mono } from "../../components/Display";
 import { NumberStepper, Select } from "../../components/Form";
 import { LabelPreview, type PreviewResult } from "../../components/LabelPreview";
 import { fitsOnRoll } from "../../lib/format";
-import { useCurrentLabelType, useLabelTypes } from "../../lib/labelTypes";
+import { useCurrentLabelType, usePartTypes } from "../../lib/labelTypes";
 import { api } from "../../lib/api";
 import { useDebounced, type PartDetail, type PartListItem, type SizeBrief } from "../../lib/parts";
 import { qk, useDefaultPrinter } from "../../lib/queries";
@@ -29,7 +29,7 @@ interface Group {
 /** 12.6 batch mode (from "Print selected"). Each part prints with its own label type (v1.1 5.4), grouped by type. */
 export function BatchPrint({ parts, onClose }: { parts: PartListItem[]; onClose: () => void }) {
   const printAs = useCurrentLabelType();
-  const types = useLabelTypes();
+  const types = usePartTypes();
   const qc = useQueryClient();
   const { printer } = useDefaultPrinter();
   const [ids, setIds] = useState(parts.map((p) => p.id));

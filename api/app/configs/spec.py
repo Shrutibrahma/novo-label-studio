@@ -164,6 +164,17 @@ def parse_spec(raw: Any) -> LabelSpec:
         raise ApiError("CONFIG_INVALID") from exc
 
 
+def validate_quick(spec: LabelSpec, qr_mode: str, serial_mode: str) -> None:
+    """v1.1 7.2: a quick label (no part) uses only fixed text, print-time fields, the print date, arrows and
+    blank boxes on a rows & boxes layout; no QR, serial, box sequence or picture."""
+    ok_cell = all(c.kind in ("text", "blank", "arrow")
+                  or (c.kind == "field" and (c.key is None or c.key == "print_date" or c.key.startswith("manual.")))
+                  for c in spec.grid.cells())
+    if (spec.style.layout != "grid" or not ok_cell or qr_mode != "none" or serial_mode != "none"
+            or spec.box_field() is not None or spec.style.image_position != "none"):
+        raise ApiError("QUICK_LABEL_INVALID")
+
+
 def validate_spec(spec: LabelSpec, custom_keys: set[str], qr_mode: str, serial_mode: str) -> None:
     """Semantic rules on top of the shape: role limits, known field keys, manual field rules, QR/serial."""
     counts = {r: 0 for r in ROLE_LIMITS}

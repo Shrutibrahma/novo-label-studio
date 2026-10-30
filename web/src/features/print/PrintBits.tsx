@@ -37,14 +37,16 @@ export type Outcome =
 export function usePrintRunner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const run = async (items: PrintItem[], loadedSizeConfirmed: boolean, labelTypeId?: string): Promise<Outcome | null> => {
+  const run = (items: PrintItem[], loadedSizeConfirmed: boolean, labelTypeId?: string): Promise<Outcome | null> =>
+    send("/print", { items, loaded_size_confirmed: loadedSizeConfirmed, label_type_id: labelTypeId ?? null });
+  /** POST /print/quick: a quick label (no part). */
+  const runQuick = (body: { label_type_id: string; manual_values: Record<string, unknown>; copies: number; loaded_size_confirmed: boolean }) =>
+    send("/print/quick", body);
+  const send = async (path: string, body: unknown): Promise<Outcome | null> => {
     setBusy(true);
     setError(null);
     try {
-      const res = await api<PrintResponse>("/print", {
-        body: { items, loaded_size_confirmed: loadedSizeConfirmed, label_type_id: labelTypeId ?? null },
-        headers: { "Idempotency-Key": newIdempotencyKey() },
-      });
+      const res = await api<PrintResponse>(path, { body, headers: { "Idempotency-Key": newIdempotencyKey() } });
       const jobs = await waitForJobs(res.jobs.map((j) => j.id), () => undefined);
       const failed = jobs.find((j) => j.status === "failed" || j.status === "cancelled");
       if (failed) return { kind: "failed", error: failed.error ?? JOB_STATUS_WORD[failed.status] };
@@ -56,7 +58,7 @@ export function usePrintRunner() {
       setBusy(false);
     }
   };
-  return { run, busy, error, setError };
+  return { run, runQuick, busy, error, setError };
 }
 
 /** Printer line: status dot + "{printer name} · {status}" (12.6 step 5). */

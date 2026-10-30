@@ -25,7 +25,8 @@ export interface PreviewResult {
 }
 
 export interface PreviewRequest {
-  part_id: string;
+  /** Omitted for a quick label type. */
+  part_id?: string;
   config_id?: string;
   label_type_id?: string;
   /** The browser's "Print as" choice, used when label_type_id is omitted (the server resolves the type). */

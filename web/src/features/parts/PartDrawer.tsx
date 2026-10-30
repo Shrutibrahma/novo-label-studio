@@ -10,7 +10,7 @@ import { ConfirmDialog, Dialog, Drawer } from "../../components/Overlay";
 import { FreshnessBadge, PartStatusBadge, PartThumb } from "../../components/PartBits";
 import { useToast } from "../../components/Toast";
 import { api, ApiError } from "../../lib/api";
-import { useLabelTypes } from "../../lib/labelTypes";
+import { usePartTypes } from "../../lib/labelTypes";
 import { qk } from "../../lib/queries";
 import { useCustomFields, usePart, type Alias, type PartDetail } from "../../lib/parts";
 import { CustomFieldInput, customValue } from "./CustomFieldInput";
@@ -115,7 +115,7 @@ function DrawerHeader({ part }: { part: PartDetail }) {
 
 /** "Label type": the type this part always prints as (saved at once), or not set (uses the last printed type). */
 function PreferredTypeField({ part, onSaved }: { part: PartDetail; onSaved: () => void }) {
-  const types = useLabelTypes();
+  const types = usePartTypes();
   const toast = useToast();
   const save = useMutation({
     mutationFn: (id: string | null) => api<PartDetail>(`/parts/${part.id}`, { method: "PATCH", body: { preferred_label_type_id: id }, headers: { "If-Match": part.updated_at } }),

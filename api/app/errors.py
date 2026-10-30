@@ -81,6 +81,8 @@ ERRORS: dict[str, tuple[int, str]] = {
     "SIZE_NAME_TAKEN": (409, "A size with this name already exists."),
     "VOID_REASON_SHORT": (422, "Reason must be at least 5 characters."),
     "CONFIG_INVALID": (422, "This label configuration isn't valid. Reload and try again."),
+    "QUICK_LABEL_INVALID": (422, "Quick labels can only use fixed text, print-time fields, the print date, arrows and "
+                                 "blank boxes."),
     "CONFIG_FIELD_UNKNOWN": (422, "A field on this label no longer exists. Remove it and publish again."),
     "IDEMPOTENCY_KEY_REQUIRED": (422, "Idempotency-Key is required."),
     "INVALID_STATE": (409, "Someone else changed this. Reload to see the latest version."),

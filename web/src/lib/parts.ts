@@ -150,7 +150,7 @@ export interface BinLayout {
 }
 
 export interface GridCell {
-  kind: "field" | "text" | "qr" | "image" | "blank";
+  kind: "field" | "text" | "qr" | "image" | "blank" | "arrow";
   key: string | null;
   text: string | null;
   heading: string | null;
@@ -159,6 +159,10 @@ export interface GridCell {
   size: "auto" | "small" | "medium" | "large" | "xl";
   align: "left" | "center";
   bold: boolean;
+  /** White on black: the whole box filled (QR and photo boxes ignore it). */
+  invert?: boolean;
+  /** Arrow boxes only. */
+  direction?: "up" | "down" | "left" | "right";
 }
 
 export interface GridRow {

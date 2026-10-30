@@ -84,9 +84,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: string | null;
   options: { value: string; label: string; disabled?: boolean; style?: React.CSSProperties }[];
+  /** Options shown in labelled groups, after `options`. */
+  groups?: { label: string; options: { value: string; label: string; disabled?: boolean }[] }[];
 }
 
-export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select({ error, options, className = "", ...rest }, ref) {
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select({ error, options, groups, className = "", ...rest }, ref) {
   return (
     <div className={`relative ${className}`}>
       <select ref={ref} className={`${CONTROL} h-9 appearance-none pr-9 ${borderFor(error)}`} {...rest}>
@@ -94,6 +96,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           <option key={o.value} value={o.value} disabled={o.disabled} style={o.style}>
             {o.label}
           </option>
+        ))}
+        {groups?.map((g) => (
+          <optgroup key={g.label} label={g.label}>
+            {g.options.map((o) => (
+              <option key={o.value} value={o.value} disabled={o.disabled}>
+                {o.label}
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
       <ChevronDown size={16} strokeWidth={1.75} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-text-muted" aria-hidden />

@@ -23,6 +23,7 @@ test("a part remembers its label type", async ({ page }) => {
   await signIn(page, ADMIN);
   const created = await page.request.post("/api/v1/label-types", { data: { name: "Bin" } });
   expect(created.status()).toBe(201);
+  await page.reload(); // the type list is cached for 30 s; Configure refreshes it, an API call doesn't
 
   // Admin: "Always print NP-10421 as Bin" in the Print dialog.
   await search(page).fill("NP-10421");

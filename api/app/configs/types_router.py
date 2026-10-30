@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -14,13 +15,17 @@ from app.audit import audit
 from app.auth.deps import DB, Admin, AnyUser
 from app.configs.effective import current_default, resolve_type
 from app.errors import ApiError
-from app.models import LabelConfig, LabelType
+from app.models import CustomFieldDef, LabelConfig, LabelSize, LabelType, SerialSequence
+from app.configs.presets import PRESETS, preset_spec
+from app.configs.router import checked_spec
 from app.parts.router import SizeBrief, size_brief
 from app.render.house import TITLE_MAX
 
 router = APIRouter(tags=["label types"])
 
 MAX_TYPES = 30
+# Kinds a new type can be created as (quick labels arrive with v1.1 U4).
+CREATABLE_KINDS = ("part",)
 
 
 class LabelTypeOut(BaseModel):
@@ -40,6 +45,14 @@ class TypeIn(BaseModel):
     name: str = Field(min_length=1, max_length=40)
     title: str | None = Field(default=None, max_length=40)
     copy_from_type_id: uuid.UUID | None = None
+    preset: str | None = None  # start from an industrial preset (v1.1 D22) instead of a copy
+
+
+class PresetOut(BaseModel):
+    key: str
+    name: str
+    size_name: str
+    kind: str
 
 
 def clean_title(raw: str | None) -> str | None:
@@ -81,9 +94,35 @@ async def list_types(_: AnyUser, db: DB) -> list[LabelTypeOut]:
     return [await type_out(db, t) for t in types]
 
 
+@router.get("/label-types/presets", response_model=list[PresetOut])
+async def list_presets(_: Admin) -> list[PresetOut]:
+    return [PresetOut(key=p.key, name=p.name, size_name=p.size_name, kind=p.kind) for p in PRESETS
+            if p.kind in CREATABLE_KINDS]
+
+
+async def preset_config(db: DB, key: str) -> tuple[uuid.UUID, dict[str, Any], str, str, uuid.UUID | None]:
+    """(size id, spec, qr mode, serial mode, serial sequence) for a preset; boxes find custom fields by name."""
+    p = next((x for x in PRESETS if x.key == key and x.kind in CREATABLE_KINDS), None)
+    if p is None:
+        raise ApiError("NOT_FOUND")
+    size = (await db.execute(select(LabelSize).where(LabelSize.name == p.size_name, LabelSize.active.is_(True)))
+            ).scalar_one_or_none()
+    if size is None:
+        raise ApiError("NOT_FOUND")
+    defs = (await db.execute(select(CustomFieldDef).where(CustomFieldDef.printable.is_(True))
+                             .order_by(CustomFieldDef.sort_order, CustomFieldDef.key))).scalars().all()
+    spec = preset_spec(p, [(d.key, d.label) for d in defs])
+    await checked_spec(db, spec, p.qr_mode, p.serial_mode)
+    seq = None
+    if p.serial_mode == "required":
+        seq = (await db.execute(select(SerialSequence.id).where(SerialSequence.name == "Default"))).scalar_one()
+    return size.id, spec, p.qr_mode, p.serial_mode, seq
+
+
 @router.post("/label-types", response_model=LabelTypeOut, status_code=201)
 async def create_type(body: TypeIn, user: Admin, db: DB) -> LabelTypeOut:
-    """A new type starts as a copy of another type's current default design (the first type when not given)."""
+    """A new type starts from an industrial preset, or as a copy of another type's current default design (the
+    first type when neither is given)."""
     name = body.name.strip()
     if not name:
         raise ApiError("FIELD_REQUIRED", fields={"name": "Name is required."}, Field="Name")
@@ -92,18 +131,25 @@ async def create_type(body: TypeIn, user: Admin, db: DB) -> LabelTypeOut:
              ).scalar_one()
     if count >= MAX_TYPES:
         raise ApiError("INVALID_STATE")
-    source = await current_default(db, (await resolve_type(db, body.copy_from_type_id)).id)
+    if body.preset:
+        size_id, spec, qr_mode, serial_mode, seq_id = await preset_config(db, body.preset)
+        origin: dict[str, Any] = {"preset": body.preset}
+    else:
+        source = await current_default(db, (await resolve_type(db, body.copy_from_type_id)).id)
+        size_id, spec, qr_mode, serial_mode, seq_id = (source.label_size_id, source.spec, source.qr_mode,
+                                                       source.serial_mode, source.serial_sequence_id)
+        origin = {"copied_from_config": source.id}
     last = (await db.execute(select(func.max(LabelType.sort_order)))).scalar_one()
     t = LabelType(name=name, title=clean_title(body.title), sort_order=int(last or 0) + 1, created_by=user.id)
     db.add(t)
     await db.flush()
     cfg = LabelConfig(label_type_id=t.id, config_key=uuid.uuid4(), version=1, scope="default", part_id=None,
-                      label_size_id=source.label_size_id, spec=source.spec, qr_mode=source.qr_mode,
-                      serial_mode=source.serial_mode, serial_sequence_id=source.serial_sequence_id, created_by=user.id)
+                      label_size_id=size_id, spec=spec, qr_mode=qr_mode, serial_mode=serial_mode,
+                      serial_sequence_id=seq_id, created_by=user.id)
     db.add(cfg)
     await db.flush()
     audit(db, user.id, "label_type.create", "label_type", t.id, None,
-          {"name": name, "copied_from_config": source.id, "config_id": cfg.id})
+          {"name": name, **origin, "config_id": cfg.id})
     await db.commit()
     return await type_out(db, t)
 

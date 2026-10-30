@@ -106,10 +106,10 @@ class BinLayout(_Strict):
 
 
 class GridCell(_Strict):
-    """One box: a field value, fixed text, the QR code, the part's photo, or a blank write-in space (filled in
-    by hand, e.g. the order date on a kanban card), with an optional heading strip."""
+    """One box: a field value, fixed text, the QR code, the part's photo, a blank write-in space (filled in
+    by hand, e.g. the order date on a kanban card) or an arrow, with an optional heading strip."""
 
-    kind: Literal["field", "text", "qr", "image", "blank"] = "field"
+    kind: Literal["field", "text", "qr", "image", "blank", "arrow"] = "field"
     key: str | None = Field(default=None, max_length=80)
     text: str | None = Field(default=None, max_length=60)
     heading: str | None = Field(default=None, max_length=24)
@@ -117,6 +117,9 @@ class GridCell(_Strict):
     size: Literal["auto", "small", "medium", "large", "xl"] = "auto"  # largest text size; shrinks to fit
     align: Literal["left", "center"] = "center"
     bold: bool = True
+    # v1.1 D23: white on black (the whole box filled; QR and photo boxes ignore it), and the arrow's direction.
+    invert: bool = False
+    direction: Literal["up", "down", "left", "right"] = "up"
 
 
 class GridRow(_Strict):

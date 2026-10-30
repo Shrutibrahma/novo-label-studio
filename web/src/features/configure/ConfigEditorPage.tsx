@@ -13,7 +13,7 @@ import { labelTypesKey, useLabelTypes } from "../../lib/labelTypes";
 import { qk, useSizes } from "../../lib/queries";
 import { useCustomFields, usePart, type LabelStyle } from "../../lib/parts";
 import { FieldsSection, LayoutSection, ManualSection, PictureSection, QrSection, Section, SizeSection, StyleSection } from "./EditorSections";
-import { GridBuilder, GridOverlay, gridTemplate, KANBAN_CARD_FIELD, type GridSel } from "./GridBuilder";
+import { GridBuilder, gridBoxes, GridOverlay, gridTemplate, KANBAN_CARD_FIELD, type GridSel } from "./GridBuilder";
 import { PartPicker, type PickedPart } from "./PartPicker";
 import { useFirstActivePart } from "./ConfigureListPage";
 import { toDraft, type ConfigOut, type Draft } from "./types";
@@ -171,6 +171,11 @@ export function ConfigEditorPage() {
                 custom={custom.data ?? []}
                 onChange={(grid, patch) => setDraft({ ...draft, ...patch, spec: { ...draft.spec, grid } })}
                 onManualFields={(manual_fields, grid) => setDraft({ ...draft, spec: { ...draft.spec, manual_fields, grid } })}
+                boxSize={(row, cell) => {
+                  const p = preview.data;
+                  const b = p?.layout_box && draft.spec.grid ? gridBoxes(draft.spec.grid, p.width_dots, p.height_dots, p.layout_box).find((x) => x.row === row && x.cell === cell) : undefined;
+                  return b && p ? { w: b.w * p.width_dots, h: b.h * p.height_dots } : null;
+                }}
               />
             </Section>
           ) : (

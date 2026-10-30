@@ -411,7 +411,7 @@ def _fit_box(text: str, family: str, weight: int, start_pt: float, min_pt: float
 
 
 def _draw_lines(draw: ImageDraw.ImageDraw, parts: list[str], family: str, weight: int, pt: float, dpi: int,
-                x: int, y: int, w: int, h: int, align: str) -> None:
+                x: int, y: int, w: int, h: int, align: str, fill: int = 0) -> None:
     size = _dots(pt, dpi)
     font = load_font(family, weight, size)
     a, d = font.getmetrics()
@@ -420,7 +420,7 @@ def _draw_lines(draw: ImageDraw.ImageDraw, parts: list[str], family: str, weight
     for part in parts:
         width = _exact(family, weight, size, part)
         tx = x if align == "left" else x + max(0, (w - width) // 2)
-        draw.text((tx, ty), part, font=font, fill=0, anchor="la")
+        draw.text((tx, ty), part, font=font, fill=fill, anchor="la")
         ty += a + d
 
 
@@ -428,16 +428,20 @@ def _rect(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int) -> None:
     draw.rectangle([x, y, x + w - 1, y + h - 1], outline=0, width=RULE)
 
 
-def _heading(draw: ImageDraw.ImageDraw, text: str, family: str, weight: int, dpi: int, x: int, y: int, w: int
-             ) -> int:
-    """A small heading strip (white text on a black bar) at the top of a box; returns its height."""
+def _heading(draw: ImageDraw.ImageDraw, text: str, family: str, weight: int, dpi: int, x: int, y: int, w: int,
+             inverted: bool = False) -> int:
+    """A small heading strip (white text on a black bar) at the top of a box; returns its height. On a white on
+    black box the bar is the box itself: white text with a 2-dot white rule under it."""
     if not text:
         return 0
     size = _dots(HEADING_PT, dpi)
     font = load_font(family, weight, size)
     a, d = font.getmetrics()
     bar = a + d + 4
-    draw.rectangle([x, y, x + w - 1, y + bar - 1], fill=0)
+    if inverted:
+        draw.rectangle([x + PAD, y + bar - RULE, x + w - 1 - PAD, y + bar - 1], fill=1)
+    else:
+        draw.rectangle([x, y, x + w - 1, y + bar - 1], fill=0)
     label = text.upper()
     width = _exact(family, weight, size, label)
     while width > w - 2 * PAD and len(label) > 1:  # headings are short; clip rather than fail
@@ -576,6 +580,24 @@ def _shares(weights: list[int], total: int) -> list[int]:
     return out + [total - sum(out)]
 
 
+ARROW_SHARE = 0.70  # an arrow's base and height, as a share of the box's smaller inner side
+
+
+def _arrow(draw: ImageDraw.ImageDraw, direction: str, x: int, y: int, w: int, h: int, fill: int) -> None:
+    """A solid isosceles triangle centred in the box (v1.1 6.1)."""
+    s = int(min(w, h) * ARROW_SHARE)
+    if s < 2:
+        return
+    cx, cy, half = x + w // 2, y + h // 2, s // 2
+    points = {
+        "up": [(cx, cy - half), (cx + half, cy + half), (cx - half, cy + half)],
+        "down": [(cx, cy + half), (cx - half, cy - half), (cx + half, cy - half)],
+        "left": [(cx - half, cy), (cx + half, cy - half), (cx + half, cy + half)],
+        "right": [(cx + half, cy), (cx - half, cy + half), (cx - half, cy - half)],
+    }[direction]
+    draw.polygon(points, fill=fill)
+
+
 def render_grid(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str, Any], config: RenderConfig,
                 box: tuple[int, int, int, int], dpi: int, picture: Image.Image | None, warn: Any) -> str | None:
     """Rows of boxes as the user built them (spec.grid). Row heights and box widths are relative weights;
@@ -593,18 +615,28 @@ def render_grid(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str,
     for row, rh in zip(rows, _shares([r.height for r in rows], h), strict=True):
         x = x0
         for cell, cw in zip(row.cells, _shares([c.width for c in row.cells], w), strict=True):
-            _rect(draw, x, y, cw, rh)
+            # White on black (v1.1 D23): the whole box is filled and its text, heading and arrow are white.
+            inverted = cell.invert and cell.kind not in ("qr", "image")
+            ink = 1 if inverted else 0
+            if inverted:
+                draw.rectangle([x, y, x + cw - 1, y + rh - 1], fill=0)
+            else:
+                _rect(draw, x, y, cw, rh)
             left = top = 0
             if cell.heading:
                 size = _dots(HEADING_PT, dpi)
                 a, d = load_font(family, head_w, size).getmetrics()
                 if rh >= 4 * (a + d + 4):
-                    top = _heading(draw, cell.heading, family, head_w, dpi, x, y, cw)
+                    top = _heading(draw, cell.heading, family, head_w, dpi, x, y, cw, inverted)
                 else:
-                    # A short box: the heading sits in a black strip on the left instead of on top.
+                    # A short box: the heading sits in a black strip on the left instead of on top (on a white
+                    # on black box: white text with a white rule beside it).
                     label = cell.heading.upper()
                     left = min(cw // 2, _exact(family, head_w, size, label) + 2 * PAD)
-                    draw.rectangle([x, y, x + left - 1, y + rh - 1], fill=0)
+                    if inverted:
+                        draw.rectangle([x + left - RULE, y + PAD, x + left - 1, y + rh - 1 - PAD], fill=1)
+                    else:
+                        draw.rectangle([x, y, x + left - 1, y + rh - 1], fill=0)
                     draw.text((x + PAD, y + (rh - (a + d)) // 2), label, font=load_font(family, head_w, size), fill=1,
                               anchor="la")
             ix, iy, iw, ih = x + left + PAD, y + top + PAD, cw - left - 2 * PAD, rh - top - 2 * PAD
@@ -627,6 +659,8 @@ def render_grid(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str,
                             warn(code)
                 elif cell.kind == "blank":
                     pass  # a write-in space: the outline and heading only
+                elif cell.kind == "arrow":
+                    _arrow(draw, cell.direction, ix, iy, iw, ih, ink)
                 elif cell.kind == "image":
                     if snapshot.get("generated", {}).get("image_sha256"):
                         if picture is None:
@@ -643,7 +677,7 @@ def render_grid(img: Image.Image, draw: ImageDraw.ImageDraw, snapshot: dict[str,
                         if fit is None:
                             warn("TEXT_TOO_LONG", cell.key if cell.kind == "field" else None)
                             fit = (GRID_MIN_PT, [text])
-                        _draw_lines(draw, fit[1], family, weight, fit[0], dpi, ix, iy, iw, ih, cell.align)
+                        _draw_lines(draw, fit[1], family, weight, fit[0], dpi, ix, iy, iw, ih, cell.align, ink)
             x += cw
         y += rh
     return payload

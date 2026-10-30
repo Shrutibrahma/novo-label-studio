@@ -9,12 +9,13 @@ from typing import Any
 
 from PIL import Image
 
-from app.configs.presets import grid_template
+from app.configs.presets import PRESETS, grid_template
 from app.configs.spec import LabelSpec
 from app.render.canvas import SAFE_MARGIN_DOTS
 from app.render.engine import RenderConfig, RenderResult, RenderSize, render
 from app.render.house import HouseStyle, snapshot_style
 from tests.test_house_style import BIN_FIELDS, GRID_LABELS, GRID_SNAPSHOT
+from tests.test_presets import preset_label
 from tests.test_render import PRINTER, SIZES
 
 
@@ -74,4 +75,8 @@ def test_every_design_shares_one_frame_band_and_footer() -> None:
         r = draw(s, size, qr)
         assert r.fits, (name, r.warnings)
         seen[name] = measure(r)
+    for p in PRESETS:  # every industrial preset at its preset size (v1.1 6.4)
+        r = preset_label(p)
+        assert r.fits, (p.key, r.warnings)
+        seen[f"preset {p.key}"] = measure(r)
     assert all(v == {"frame": 4, "band": 34, "rule": 2} for v in seen.values()), seen

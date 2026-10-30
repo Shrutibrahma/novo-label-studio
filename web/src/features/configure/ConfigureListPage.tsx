@@ -51,7 +51,7 @@ export function ConfigureListPage() {
   const first = useFirstActivePart();
   const custom = useCustomFields();
   const def = configs.data?.default;
-  const preview = usePreview(def && first.data ? { part_id: first.data.id, config_id: def.id } : null, 0);
+  const preview = usePreview(def && first.data ? { part_id: first.data.id, config_id: def.id, label_type_id: selected?.id } : null, 0);
   const customLabels = Object.fromEntries((custom.data ?? []).map((f) => [f.key, f.label]));
 
   return (
@@ -194,7 +194,14 @@ export function ConfigureListPage() {
   );
 }
 
-/** New label type (starts as a copy of another type's design) or rename the selected one. */
+interface Preset {
+  key: string;
+  name: string;
+  size_name: string;
+  kind: "part" | "quick";
+}
+
+/** New label type (from an industrial preset, or a copy of another type's design) or rename the selected one. */
 function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
   open: boolean;
   mode: "new" | "rename";
@@ -206,6 +213,7 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [copyFrom, setCopyFrom] = useState("");
+  const presets = useQuery({ queryKey: ["label-type-presets"], queryFn: () => api<Preset[]>("/label-types/presets"), enabled: open && mode === "new", staleTime: Infinity });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [openedFor, setOpenedFor] = useState<string | null>(null);
@@ -224,7 +232,11 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
       const t =
         mode === "rename" && current
           ? await api<LabelType>(`/label-types/${current.id}`, { method: "PATCH", body: { name, title: title.trim() || null } })
-          : await api<LabelType>("/label-types", { body: { name, title: title.trim() || null, copy_from_type_id: copyFrom || null } });
+          : await api<LabelType>("/label-types", {
+              body: copyFrom.startsWith("preset:")
+                ? { name, title: title.trim() || null, preset: copyFrom.slice(7) }
+                : { name, title: title.trim() || null, copy_from_type_id: copyFrom || null },
+            });
       if (mode === "new") setCurrentLabelType(t.id);
       onSaved(t);
     } catch (e) {
@@ -257,8 +269,23 @@ function TypeDialog({ open, mode, types, current, onClose, onSaved }: {
           <Input id="type-title" maxLength={24} placeholder={name.trim().toUpperCase()} className="uppercase" value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
         {mode === "new" && (
-          <Field label="Start from the design of" htmlFor="type-copy">
-            <Select id="type-copy" value={copyFrom} options={types.map((t) => ({ value: t.id, label: `${t.name} (${sizeText(t.size)})` }))} onChange={(e) => setCopyFrom(e.target.value)} />
+          <Field label="Start from" htmlFor="type-copy">
+            <Select
+              id="type-copy"
+              value={copyFrom}
+              options={[]}
+              groups={[
+                { label: "Presets", options: (presets.data ?? []).map((p) => ({ value: `preset:${p.key}`, label: `${p.name} (${p.size_name})` })) },
+                { label: "Copy an existing type", options: types.map((t) => ({ value: t.id, label: `${t.name} (${sizeText(t.size)})` })) },
+              ]}
+              onChange={(e) => {
+                const v = e.target.value;
+                // A preset names the new type, unless a name was already typed.
+                const p = (presets.data ?? []).find((x) => `preset:${x.key}` === v);
+                if (p && !name.trim()) setName(p.name);
+                setCopyFrom(v);
+              }}
+            />
           </Field>
         )}
       </div>

@@ -22,7 +22,7 @@ Decisions it left open: `OPEN_QUESTIONS.md` § v1.1 (#100–).
 | H Hardware validation | waiting for the ZQ630 Plus — must pass before v1.1 is done |
 | U1 House label style | done |
 | U2 Remember the type | done |
-| U3 Industrial presets + box options | not started |
+| U3 Industrial presets + box options | done |
 | U4 Quick labels | not started |
 | U5 Operations | not started |
 

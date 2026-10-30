@@ -386,3 +386,16 @@ Decisions for `SPEC.md` v1.1 (addendum of 2026-10-30) that the addendum left ope
      `{"field": "label_type", "level": "warning", ...}` in `import_row.errors` (the row stays new/update and
      accepted; the review shows it in amber). Header synonyms: "label type", "labeltype", "print as".
 116. **Part drawer "Label type"** saves as soon as it's changed (it isn't part of the details form's Save).
+117. **Presets live on the server.** `GET /label-types/presets` lists them and `POST /label-types {preset}` builds
+     the design (`app/configs/presets.py`), so the goldens and the uniformity test render exactly what a new
+     type starts with. "Bin label" and "Kanban card" reuse the bin / tps grid templates (#109). The Workstation
+     sign (P7) is a quick label and is offered once quick labels exist (U4). A preset type's name defaults to
+     the preset's name in the dialog.
+118. **White on black details.** The whole box is filled black; a top heading becomes white text with a 2-dot
+     white rule under it (inset by the box padding), a side heading (short boxes) white text with a 2-dot white
+     rule beside it. Write-in boxes can be inverted too (a solid black box). QR and photo boxes ignore `invert`
+     (stored, not drawn). The arrow is centred in the box's inner area (inside padding and heading).
+119. **Builder nudges (6.3).** The QR square check uses the box's size on the current label (from the preview's
+     layout box) and shows "QR box isn't square; the code will be smaller." Presets themselves are checked by
+     `test_presets_follow_the_look_rules` (one xl box at most, headings uppercase, ≤ 14 characters); the builder
+     doesn't block other designs.

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Image as ImageIcon, LayoutTemplate, Minus, PenLine, Plus, QrCode, Trash2, Type } from "lucide-react";
+import { ArrowBigUp, ArrowDown, ArrowUp, Image as ImageIcon, LayoutTemplate, Minus, PenLine, Plus, QrCode, Trash2, Type } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "../../components/Button";
 import { Input, SegmentedControl, Select, Switch } from "../../components/Form";
@@ -119,11 +119,12 @@ function cellLabel(c: GridCell, custom: Record<string, string>, draft: Draft): s
   if (c.kind === "blank") return "Write-in";
   if (c.kind === "qr") return "QR code";
   if (c.kind === "image") return "Photo";
+  if (c.kind === "arrow") return `Arrow ${c.direction ?? "up"}`;
   if (c.kind === "text") return c.text?.trim() || "Text";
   return c.key ? fieldName(c.key, custom, draft.spec.manual_fields) : "Pick a field";
 }
 
-const KIND_ICON = { field: Type, text: Type, qr: QrCode, image: ImageIcon, blank: PenLine } as const;
+const KIND_ICON = { field: Type, text: Type, qr: QrCode, image: ImageIcon, blank: PenLine, arrow: ArrowBigUp } as const;
 
 /** A row drawn as a bar of its boxes; click a box to edit it, drag a divider to resize the boxes beside it. */
 function WidthBar({ row, rowIndex, selected, onSelect, onWidths, label }: {
@@ -194,6 +195,13 @@ function WidthBar({ row, rowIndex, selected, onSelect, onWidths, label }: {
   );
 }
 
+/** 6.3: a QR box whose sides differ by more than a third wastes space around the (square) code. */
+function qrNotSquare(size: { w: number; h: number } | null | undefined): boolean {
+  if (!size || size.h <= 0) return false;
+  const ratio = size.w / size.h;
+  return ratio < 0.75 || ratio > 1.33;
+}
+
 /** Section "Boxes" (grid layout): templates, rows of boxes, and the editor of the selected box. */
 export type GridSel = { row: number; cell: number } | null;
 
@@ -248,11 +256,13 @@ export function GridOverlay({ grid, widthDots, heightDots, layoutBox, sel, onSel
   );
 }
 
-export function GridBuilder({ draft, custom, onChange, onManualFields, sel: selProp, onSel }: {
+export function GridBuilder({ draft, custom, onChange, onManualFields, sel: selProp, onSel, boxSize }: {
   draft: Draft;
   custom: CustomField[];
   onChange: (grid: GridLayout, patch?: Partial<Draft>) => void;
   onManualFields: (manual: ManualField[], grid: GridLayout) => void;
+  /** A box's size in dots on the current label size (from the preview), for the square-QR nudge. */
+  boxSize?: (row: number, cell: number) => { w: number; h: number } | null;
   /** The selected box, when the page shares it with the preview (click a box on the label). */
   sel?: GridSel;
   onSel?: (s: GridSel) => void;
@@ -413,8 +423,25 @@ export function GridBuilder({ draft, custom, onChange, onManualFields, sel: selP
                     { value: "qr", label: "QR" },
                     { value: "image", label: "Photo" },
                     { value: "blank", label: "Write-in" },
+                    { value: "arrow", label: "Arrow" },
                   ]}
                 />
+                {selected.kind === "arrow" && (
+                  <SegmentedControl
+                    ariaLabel="Arrow direction"
+                    value={selected.direction ?? "up"}
+                    onChange={(direction) => setCell(r, sel.cell, { direction })}
+                    options={[
+                      { value: "up", label: "Up" },
+                      { value: "down", label: "Down" },
+                      { value: "left", label: "Left" },
+                      { value: "right", label: "Right" },
+                    ]}
+                  />
+                )}
+                {selected.kind !== "qr" && selected.kind !== "image" && (
+                  <Switch label={<span className="t-small text-text-secondary">White on black</span>} checked={!!selected.invert} onChange={(invert) => setCell(r, sel.cell, { invert })} />
+                )}
                 {selected.kind === "field" && (
                   <Select aria-label="Field" className="t-small" value={selected.key ?? ""} options={fieldOptions} onChange={(e) => setCell(r, sel.cell, { key: e.target.value || null })} />
                 )}
@@ -461,6 +488,9 @@ export function GridBuilder({ draft, custom, onChange, onManualFields, sel: selP
                 </details>
                 )}
                 {selected.kind === "qr" && <p className="t-caption text-text-muted">What the code holds is set under QR code &amp; serial.</p>}
+                {selected.kind === "qr" && qrNotSquare(boxSize?.(sel.row, sel.cell)) && (
+                  <p className="t-caption text-warning">QR box isn't square; the code will be smaller.</p>
+                )}
                 {selected.kind === "image" && <p className="t-caption text-text-muted">The part's photo, in black-and-white dots. Parts without a photo leave this box empty.</p>}
                 {selected.kind === "blank" && <p className="t-caption text-text-muted">An empty box to fill in by hand, like an order or due date. Add a heading so people know what to write.</p>}
               </div>

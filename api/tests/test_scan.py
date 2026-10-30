@@ -42,7 +42,7 @@ async def test_scan_page_needs_sign_in_unless_public(admin: httpx.AsyncClient, n
 
 async def test_qr_link_settings(admin: httpx.AsyncClient) -> None:
     qr = (await admin.get(f"{V}/settings")).json()["qr"]
-    assert qr == {"link": True, "link_base": "https://localhost:8443", "scan_public": False}
+    assert qr == {"link": False, "link_base": "https://localhost:8443", "scan_public": False}
     r = await admin.patch(f"{V}/settings", json={"qr_link_base": "  https://192.168.1.20:8443/ "})
     assert r.json()["qr"]["link_base"] == "https://192.168.1.20:8443"
     r = await admin.patch(f"{V}/settings", json={"qr_link_base": "192.168.1.20"})

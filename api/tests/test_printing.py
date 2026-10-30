@@ -76,7 +76,7 @@ async def test_print_one_label_and_idempotency(admin: httpx.AsyncClient, ready: 
         assert pl.snapshot["part"] == {"label_name": "10-32 x 1/2 16", "part_number": "NP-10421"}
         assert pl.snapshot["manual"] == {"box": {"index": 1, "total": 1}}
         assert pl.snapshot["generated"]["serial"] == "NOVO-00000001"
-        assert pl.qr_payload == "HTTPS://LOCALHOST:8443/S/NOVO-00000001" and pl.dpi == 203
+        assert pl.qr_payload == "SN:NOVO-00000001|PN:NP-10421" and pl.dpi == 203
         zpl = (await db.get(PrintJob, pl.job_id)).payload_zpl.decode()  # type: ignore[union-attr]
         assert zpl.count("^XA") == 1 and "^PQ2\n" in zpl and "^PW812\n^LL406\n" in zpl
         serial = await db.get(IssuedSerial, "NOVO-00000001")
@@ -452,7 +452,7 @@ async def test_grid_layout_publishes_previews_and_prints(admin: httpx.AsyncClien
     async with sessionmaker()() as db:
         pl = (await db.execute(select(PrintedLabel).where(PrintedLabel.part_id == uuid.UUID(part["id"])))).scalar_one()
         assert pl.snapshot["part"] == {"part_number": "NP-2", "bin_qty": "300", "part_name": "Plain washer"}
-        assert pl.qr_payload == "HTTPS://LOCALHOST:8443/P/NP-2"
+        assert pl.qr_payload == "PN:NP-2"
 
 
 async def test_printer_identity_is_editable(admin: httpx.AsyncClient, ready: dict[str, Any]) -> None:

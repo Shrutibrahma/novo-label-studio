@@ -108,7 +108,7 @@ async def settings_out(db: DB) -> SettingsOut:
 
 async def qr_settings(db: DB) -> QrSettings:
     base = str(await get_setting(db, SETTING_QR_LINK_BASE, "") or get_settings().public_base_url)
-    return QrSettings(link=bool(await get_setting(db, SETTING_QR_LINK, True)), link_base=base.rstrip("/"),
+    return QrSettings(link=bool(await get_setting(db, SETTING_QR_LINK, False)), link_base=base.rstrip("/"),
                       scan_public=bool(await get_setting(db, SETTING_SCAN_PUBLIC, False)))
 
 

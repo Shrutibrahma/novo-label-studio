@@ -68,6 +68,7 @@ ERRORS: dict[str, tuple[int, str]] = {
     # Not in 14.2; see OPEN_QUESTIONS.md for each.
     "FIELD_NOT_DATE": (422, "{Field} must be a date."),
     "FIELD_KEY_TAKEN": (409, "A field with this key already exists."),
+    "QR_LINK_INVALID": (422, "Use the address phones open, for example https://192.168.1.20:8443."),
     "FIELD_KEY_INVALID": (422, "Key can use lowercase letters, numbers and underscores, starting with a letter."),
     "IMAGE_UNSUPPORTED": (415, "Upload a PNG, JPEG or WebP image."),
     "IMAGE_TOO_LARGE": (413, "This image is too large. Limit: 10 MB."),

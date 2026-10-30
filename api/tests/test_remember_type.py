@@ -118,7 +118,7 @@ async def test_batch_mixes_types(admin: httpx.AsyncClient, setup_done: dict[str,
         houses = [pl.snapshot["generated"]["house_style"]["title"] for pl in rows]
     first = (await admin.get(f"{V}/label-types")).json()[0]
     assert types == [uuid.UUID(first["id"]), uuid.UUID(bin_type["id"])]
-    assert houses == ["Label", "Bin"]
+    assert houses == ["", ""]  # the type name isn't printed in the band unless the style asks for it
 
 
 async def test_import_label_type_column(admin: httpx.AsyncClient) -> None:

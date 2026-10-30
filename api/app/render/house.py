@@ -40,6 +40,8 @@ class HouseStyle(BaseModel):
     frame: bool = True
     title_band: bool = True
     company_in_band: bool = True
+    # The label type's name ("LABEL", "KANBAN") in the band. Off by default: the stock already tells them apart.
+    title_in_band: bool = False
     footer: bool = True
 
 
@@ -130,7 +132,13 @@ def draw_house(draw: ImageDraw.ImageDraw, hs: dict[str, Any], box: tuple[int, in
         company = str(hs.get("company") or "").strip().upper() if hs.get("company_in_band", True) else ""
         title_w = _width(family, 700, TITLE_PT, dpi, title)
         company_w = _width(family, 400, COMPANY_PT, dpi, company)
-        if company and 2 * pad + title_w + _scale(BAND_GAP, dpi) + company_w > w:
+        if company and not title and "title_in_band" in hs:
+            # Only the company name (snapshots from before title_in_band keep the old right-aligned layout).
+            pt, shown = fit_title(company, family, dpi, w - 2 * pad)
+            if shown:
+                _text_centered(draw, x + pad, y, band, shown, family, 700, pt, dpi, 1)
+            company = ""
+        elif company and 2 * pad + title_w + _scale(BAND_GAP, dpi) + company_w > w:
             company = ""  # never truncated: left out when it doesn't fit
         if company:
             _text_centered(draw, x + w - pad - company_w, y, band, company, family, 400, COMPANY_PT, dpi, 1)

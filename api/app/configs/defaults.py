@@ -52,4 +52,9 @@ DEFAULT_SPEC: dict[str, Any] = {
 SETTING_COMPANY = "company.name"
 SETTING_FONTS = "fonts.allowed"
 SETTING_HOUSE_STYLE = "label.house_style"  # v1.1 D21, migration 0005
+# QR codes open the part page (owner's request, 2026-10-30): on/off, the address phones use, and whether the page
+# needs a sign-in. No migration: absent rows mean the defaults below (on, PUBLIC_BASE_URL, sign-in needed).
+SETTING_QR_LINK = "qr.link"
+SETTING_QR_LINK_BASE = "qr.link_base"
+SETTING_SCAN_PUBLIC = "qr.scan_public"
 ALL_FONTS = ["inter", "roboto_condensed", "atkinson"]

@@ -20,7 +20,7 @@ from app.configs.effective import resolve_type
 from app.models import AppSetting, Asset, CustomFieldDef, LabelSize, LabelType, Part, PartAlias, Printer, SerialSequence
 from app.render.engine import RenderConfig, RenderPrinter, RenderResult, RenderSize, render
 from app.render.house import HouseStyle, snapshot_style
-from app.settings.router import house_style
+from app.settings.router import house_style, qr_settings
 from app.render.snapshot import build_snapshot, clean_manual, field_labels, part_field_values, quick_snapshot
 
 
@@ -32,6 +32,7 @@ class RenderContext:
     sequence: SerialSequence
     house: HouseStyle
     company: str
+    qr_link_base: str | None = None  # QR codes link to {base}/p/{part number}; None = plain text
 
 
 @dataclass
@@ -53,17 +54,23 @@ async def render_context(db: AsyncSession, printer: Printer | None = None) -> Re
     defs = (await db.execute(select(CustomFieldDef).where(CustomFieldDef.printable.is_(True)))).scalars().all()
     seq = (await db.execute(select(SerialSequence).where(SerialSequence.name == "Default"))).scalar_one()
     company = await db.get(AppSetting, SETTING_COMPANY)
+    qr = await qr_settings(db)
     return RenderContext(printer=printer, custom_labels={d.key: d.label for d in defs},
                          custom_keys={d.key for d in defs}, sequence=seq, house=await house_style(db),
-                         company=str(company.value) if company is not None else "")
+                         company=str(company.value) if company is not None else "",
+                         qr_link_base=qr.link_base if qr.link else None)
 
 
 def house_snapshot(ctx: RenderContext, label_type: LabelType, spec: LabelSpec,
                    style: HouseStyle | None = None) -> dict[str, Any]:
     """generated.house_style for a label of `label_type`. The band shows the type's title (its name when not
-    set); a bin-layout design shows its own title there instead (v1.1 4.2)."""
-    title = spec.bin.title if spec.style.layout == "bin" else (label_type.title or label_type.name)
-    return snapshot_style(style or ctx.house, title.strip(), ctx.company)
+    set) only when the style asks for it; a bin-layout design shows its own title there instead (v1.1 4.2)."""
+    style = style or ctx.house
+    if spec.style.layout == "bin":
+        title = spec.bin.title
+    else:
+        title = (label_type.title or label_type.name) if style.title_in_band else ""
+    return snapshot_style(style, title.strip(), ctx.company)
 
 
 async def type_of(db: AsyncSession, type_id: uuid.UUID | None) -> LabelType:
@@ -117,6 +124,20 @@ def render_snapshot(snapshot: dict[str, Any], spec: LabelSpec, qr_mode: str, siz
                   RenderPrinter(dpi=printer.dpi, print_width_in=printer.print_width_in), snapshot_picture(snapshot))
 
 
+def render_part_snapshot(spec: LabelSpec, qr_mode: str, values: dict[str, Any], custom_keys: set[str],
+                         manual: dict[str, Any], serial: str | None, print_date: str, labels: dict[str, str],
+                         house: dict[str, Any], link_base: str | None, size: LabelSize, printer: Printer
+                         ) -> tuple[dict[str, Any], RenderResult]:
+    """Builds the snapshot and renders it. A link QR code that is too small for its box falls back to the short
+    part-number text (the old QR content), so turning links on never stops a design from printing."""
+    snap = build_snapshot(spec, qr_mode, values, custom_keys, manual, serial, print_date, labels, house, link_base)
+    result = render_snapshot(snap, spec, qr_mode, size, printer, labels)
+    if link_base and not result.fits and any(w.code == "QR_TOO_SMALL" for w in result.warnings):
+        snap = build_snapshot(spec, qr_mode, values, custom_keys, manual, serial, print_date, labels, house)
+        result = render_snapshot(snap, spec, qr_mode, size, printer, labels)
+    return snap, result
+
+
 async def render_quick(db: AsyncSession, ctx: RenderContext, label_type: LabelType, cfg: ConfigLike,
                        manual_values: dict[str, Any] | None, print_date: str, house: HouseStyle | None = None
                        ) -> tuple[RenderResult, dict[str, Any], LabelSpec, LabelSize]:
@@ -141,8 +162,9 @@ async def render_part(db: AsyncSession, ctx: RenderContext, part: Part, cfg: Con
         raise ApiError("NOT_FOUND")
     labels = field_labels(spec, ctx.custom_labels)
     manual = clean_manual(spec, manual_values, labels)
-    snapshot = build_snapshot(spec, cfg.qr_mode, part_values(part, await label_name_of(db, part.id),
-                                                             await image_of(db, part)),
-                              ctx.custom_keys, manual, serial if cfg.serial_mode == "required" else None, print_date,
-                              labels, house_snapshot(ctx, await type_of(db, cfg.label_type_id), spec, house))
-    return render_snapshot(snapshot, spec, cfg.qr_mode, size, ctx.printer, labels), snapshot, spec, size
+    values = part_values(part, await label_name_of(db, part.id), await image_of(db, part))
+    snapshot, result = render_part_snapshot(
+        spec, cfg.qr_mode, values, ctx.custom_keys, manual, serial if cfg.serial_mode == "required" else None,
+        print_date, labels, house_snapshot(ctx, await type_of(db, cfg.label_type_id), spec, house), ctx.qr_link_base,
+        size, ctx.printer)
+    return result, snapshot, spec, size

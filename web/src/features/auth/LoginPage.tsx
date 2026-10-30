@@ -8,6 +8,7 @@ import { AuthBackdrop, BrandLogo } from "../../app/Shell";
 import { api, ApiError } from "../../lib/api";
 import { qk, useMe, useSetupStatus } from "../../lib/queries";
 import type { User } from "../../lib/types";
+import { useDeviceViewport } from "../scan/ScanPage";
 
 /** 12.2 Login. */
 export function LoginPage() {
@@ -21,9 +22,11 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const from = (location.state as { from?: string } | null)?.from;
+  useDeviceViewport(!!from && /^\/[ps]\//i.test(from)); // signing in from a scanned QR code, on a phone
 
   if (setup.data?.needs_setup) return <Navigate to="/setup" replace />;
-  if (me.data) return <Navigate to="/print" replace />;
+  if (me.data) return <Navigate to={from && from !== "/login" ? from : "/print"} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -32,7 +35,6 @@ export function LoginPage() {
     try {
       const user = await api<User>("/auth/login", { body: { username, password }, quiet401: true });
       qc.setQueryData(qk.me, user);
-      const from = (location.state as { from?: string } | null)?.from;
       navigate(from && from !== "/login" ? from : "/print", { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Can't reach the server. Printing is paused.");

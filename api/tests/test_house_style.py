@@ -150,7 +150,8 @@ def test_long_title_shrinks_then_clips_never_overflows() -> None:
 async def test_label_style_api(admin: httpx.AsyncClient, operator: httpx.AsyncClient) -> None:
     r = await operator.get(f"{V}/settings/label-style")
     assert r.status_code == 200 and r.json() == HouseStyle().model_dump()
-    new = {"font": "atkinson", "frame": True, "title_band": False, "company_in_band": True, "footer": True}
+    new = {"font": "atkinson", "frame": True, "title_band": False, "company_in_band": True, "footer": True,
+           "title_in_band": False}
     assert (await operator.put(f"{V}/settings/label-style", json=new)).status_code == 403
     r = await admin.put(f"{V}/settings/label-style", json={**new, "font": "comic_sans"})
     assert r.status_code == 422 and r.json()["error"]["code"] == "CONFIG_INVALID"
@@ -164,7 +165,8 @@ async def test_label_style_api(admin: httpx.AsyncClient, operator: httpx.AsyncCl
 async def test_preview_draft_style_is_admin_only_and_titles(admin: httpx.AsyncClient,
                                                             operator: httpx.AsyncClient) -> None:
     part = (await admin.post(f"{V}/parts", json={"part_number": "T-1", "part_name": "Styled part"})).json()
-    draft = {"font": "inter", "frame": True, "title_band": True, "company_in_band": False, "footer": False}
+    draft = {"font": "inter", "frame": True, "title_band": True, "company_in_band": False, "footer": False,
+             "title_in_band": True}
     body = {"part_id": part["id"], "house_style": draft}
     assert (await operator.post(f"{V}/render/preview", json=body)).status_code == 403
     first = await admin.post(f"{V}/render/preview", json=body)
@@ -180,3 +182,17 @@ async def test_preview_draft_style_is_admin_only_and_titles(admin: httpx.AsyncCl
     assert r.status_code == 422 and r.json()["error"]["code"] == "FIELD_TOO_LONG"
     r = await admin.patch(f"{V}/label-types/{types[0]['id']}", json={"title": None})
     assert r.status_code == 200 and r.json()["title"] is None
+
+
+async def test_band_shows_only_the_company_by_default(admin: httpx.AsyncClient) -> None:
+    """Owner's request 2026-10-30: no "LABEL" / "KANBAN" in the band, just the (editable) company name."""
+    part = (await admin.post(f"{V}/parts", json={"part_number": "T-2", "part_name": "Band part"})).json()
+    style = {"font": "inter", "frame": True, "title_band": True, "company_in_band": True, "footer": False}
+    plain = await admin.post(f"{V}/render/preview", json={"part_id": part["id"], "house_style": style})
+    named = await admin.post(f"{V}/render/preview", json={"part_id": part["id"],
+                                                          "house_style": style | {"title_in_band": True}})
+    assert plain.status_code == named.status_code == 200
+    assert plain.json()["png_base64"] != named.json()["png_base64"]
+    await admin.patch(f"{V}/settings", json={"company_name": "Novo Lean Solutions"})
+    renamed = await admin.post(f"{V}/render/preview", json={"part_id": part["id"], "house_style": style})
+    assert renamed.json()["png_base64"] != plain.json()["png_base64"]

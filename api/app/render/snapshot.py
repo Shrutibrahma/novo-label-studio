@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 from app.configs.spec import CORE_KEYS, LabelSpec, ManualBox, ManualChoice, ManualNumber, ManualText
 from app.errors import ApiError
@@ -40,11 +41,19 @@ def part_field_values(part_number: str, part_name: str, description: str | None,
 
 
 def qr_payload(qr_mode: str, part_number: str, serial: str | None,
-               label_data: list[tuple[str, str]] | None = None) -> str | None:
+               label_data: list[tuple[str, str]] | None = None, link_base: str | None = None) -> str | None:
     """9.4: plain text; always the part number, never the label name. With label data (style.qr_content
-    "label_data"), every value printed on the label follows, one "HEADING: value" per line."""
+    "label_data"), every value printed on the label follows, one "HEADING: value" per line. With `link_base`
+    (Settings: QR codes open the part page) a part-number QR is a link to the part page instead: {base}/P/{part
+    number}, or {base}/S/{serial} on serial QR codes. All in capitals, so the QR code uses its compact
+    alphanumeric mode (scheme, host and the part lookup ignore case): about the size of the old PN: text."""
     if qr_mode == "none":
         return None
+    if link_base and not label_data:
+        base = link_base.rstrip("/").upper()
+        if qr_mode == "serial":
+            return f"{base}/S/{quote((serial or '').upper(), safe='')}"
+        return f"{base}/P/{quote(part_number.strip().upper(), safe='')}"
     head = f"PN:{part_number}" if qr_mode == "part" else f"SN:{serial or ''}|PN:{part_number}"
     if not label_data:
         return head
@@ -142,7 +151,8 @@ def quick_snapshot(manual: dict[str, Any], print_date: str, house: dict[str, Any
 
 def build_snapshot(spec: LabelSpec, qr_mode: str, part_values: dict[str, Any], custom_keys: set[str],
                    manual: dict[str, Any], serial: str | None, print_date: str,
-                   labels: dict[str, str] | None = None, house: dict[str, Any] | None = None) -> dict[str, Any]:
+                   labels: dict[str, str] | None = None, house: dict[str, Any] | None = None,
+                   link_base: str | None = None) -> dict[str, Any]:
     """snapshot.part keys are exactly the part fields printed on the label (core, custom, label_name) with the
     source JSON types; empty fields aren't printed, so they aren't in the snapshot. `house` is the house style
     (render.house.snapshot_style) the label is drawn with."""
@@ -153,7 +163,7 @@ def build_snapshot(spec: LabelSpec, qr_mode: str, part_values: dict[str, Any], c
         generated["serial"] = serial
     data = label_data(spec, part_values, manual, serial, print_date, labels or {}) \
         if spec.style.qr_content == "label_data" else None
-    payload = qr_payload(qr_mode, str(part_values["part_number"]), serial, data)
+    payload = qr_payload(qr_mode, str(part_values["part_number"]), serial, data, link_base)
     if payload is not None:
         generated["qr_payload"] = payload
     wants_image = (spec.style.image_position != "none" if spec.style.layout != "grid"

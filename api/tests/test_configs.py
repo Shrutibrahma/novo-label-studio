@@ -143,8 +143,8 @@ async def test_preview_matches_renderer_and_never_allocates(admin: httpx.AsyncCl
         assert (await db.execute(select(func.count()).select_from(IssuedSerial))).scalar() == 0
     snapshot = {"part": {"label_name": "10-32 x 1/2 16", "part_number": "NP-10421"}, "manual": {},
                 "generated": {"print_date": today.isoformat(), "renderer_version": renderer_version(),
-                              "serial": "NOVO-888888", "qr_payload": "SN:NOVO-888888|PN:NP-10421",
-                              "house_style": snapshot_style(HouseStyle(), "Label", "Novo")}}
+                              "serial": "NOVO-888888", "qr_payload": "HTTPS://LOCALHOST:8443/S/NOVO-888888",
+                              "house_style": snapshot_style(HouseStyle(), "", "Novo")}}
     expected = render(snapshot, RenderConfig(LabelSpec.model_validate(spec), "serial", {}),
                       RenderSize(Decimal("4.000"), Decimal("2.000")), RenderPrinter(203, Decimal("4.100")))
     assert base64.b64decode(body["png_base64"]) == expected.png

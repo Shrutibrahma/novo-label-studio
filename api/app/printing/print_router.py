@@ -35,11 +35,11 @@ from app.render.service import (
     preview_serial,
     ConfigLike,
     render_context,
+    render_part_snapshot,
     render_quick,
-    render_snapshot,
     type_of,
 )
-from app.render.snapshot import build_snapshot, clean_manual, field_labels
+from app.render.snapshot import clean_manual, field_labels
 from app.render.zpl import job_payload
 from app.timeutil import local_today, request_zone
 
@@ -219,9 +219,9 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
         if box is not None:
             manual[box.key] = {"index": p.indexes[0] or 1, "total": p.item.group.total if p.item.group else 1}
         serial = preview_serial(ctx.sequence) if p.config.serial_mode == "required" else None
-        snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date, labels,
-                              house[p.config.label_type_id])
-        result = await to_thread.run_sync(render_snapshot, snap, p.spec, p.config.qr_mode, p.size, printer, labels)
+        _, result = await to_thread.run_sync(render_part_snapshot, p.spec, p.config.qr_mode, values, ctx.custom_keys,
+                                             manual, serial, print_date, labels, house[p.config.label_type_id],
+                                             ctx.qr_link_base, p.size, printer)
         if not result.fits:
             raise _first_warning(result)
 
@@ -260,9 +260,9 @@ async def create_print(body: PrintIn, request: Request, user: AnyUser, db: DB,
             manual = dict(p.manual)
             if box is not None:
                 manual[box.key] = {"index": index or 1, "total": p.item.group.total if p.item.group else 1}
-            snap = build_snapshot(p.spec, p.config.qr_mode, values, ctx.custom_keys, manual, serial, print_date, labels,
-                                  house[p.config.label_type_id])
-            result = await to_thread.run_sync(render_snapshot, snap, p.spec, p.config.qr_mode, p.size, printer, labels)
+            snap, result = await to_thread.run_sync(render_part_snapshot, p.spec, p.config.qr_mode, values,
+                                                    ctx.custom_keys, manual, serial, print_date, labels,
+                                                    house[p.config.label_type_id], ctx.qr_link_base, p.size, printer)
             if not result.fits:  # can't happen after the placeholder check; never print a label that doesn't fit
                 raise _first_warning(result)
             rendered.append((p, index, serial, snap, result))

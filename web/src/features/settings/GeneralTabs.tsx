@@ -10,7 +10,7 @@ import { qk, useSettings } from "../../lib/queries";
 import { formatDateTime } from "../../lib/format";
 import type { AppSettings, BackupStatus } from "../../lib/types";
 
-function useSaveSettings(onFieldErrors: (f: Record<string, string>) => void) {
+export function useSaveSettings(onFieldErrors: (f: Record<string, string>) => void) {
   const qc = useQueryClient();
   const toast = useToast();
   return useMutation({

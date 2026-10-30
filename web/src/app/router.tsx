@@ -7,6 +7,7 @@ import { HistoryPage } from "../features/history/HistoryPage";
 import { ImportPage } from "../features/import/ImportPage";
 import { PartsPage } from "../features/parts/PartsPage";
 import { PrintLabelsPage } from "../features/print/PrintLabelsPage";
+import { ScanPage } from "../features/scan/ScanPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { RequireAuth, SessionWatcher } from "./auth";
 import { Shell } from "./Shell";
@@ -34,6 +35,9 @@ export const router = createBrowserRouter([
     children: [
       { path: "/login", element: <LoginPage /> },
       { path: "/setup", element: <SetupPage /> },
+      // What a label's QR code opens; signs in first unless the page is open to anyone (Settings → Label style).
+      { path: "/p/*", element: <ScanPage /> },
+      { path: "/s/*", element: <ScanPage /> },
       {
         element: (
           <RequireAuth>

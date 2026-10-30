@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/Button";
-import { Card } from "../../components/Display";
-import { Checkbox, SegmentedControl } from "../../components/Form";
+import { Banner, Card } from "../../components/Display";
+import { Checkbox, Field, Input, SegmentedControl, Switch } from "../../components/Form";
 import { LabelPreview, usePreview } from "../../components/LabelPreview";
 import { useToast } from "../../components/Toast";
 import { api, ApiError } from "../../lib/api";
@@ -10,6 +10,7 @@ import { useLabelTypes, type LabelType } from "../../lib/labelTypes";
 import type { PartList } from "../../lib/parts";
 import { useSettings } from "../../lib/queries";
 import type { HouseStyle } from "../../lib/types";
+import { useSaveSettings } from "./GeneralTabs";
 
 const FONT_NAMES: Record<HouseStyle["font"], string> = { inter: "Inter", roboto_condensed: "Roboto Condensed", atkinson: "Atkinson Hyperlegible" };
 const labelStyleKey = ["label-style"] as const;
@@ -66,6 +67,12 @@ export function LabelStyleTab() {
             <Checkbox label="Frame around every label" checked={draft.frame} onChange={(frame) => set({ frame })} />
             <Checkbox label="Title band at the top" checked={draft.title_band} onChange={(title_band) => set({ title_band })} />
             <Checkbox label="Company name in the title band" checked={draft.company_in_band} disabled={!draft.title_band} onChange={(company_in_band) => set({ company_in_band })} />
+            <Checkbox
+              label="Label type name in the title band (LABEL, KANBAN, ...)"
+              checked={draft.title_in_band}
+              disabled={!draft.title_band}
+              onChange={(title_in_band) => set({ title_in_band })}
+            />
             <Checkbox label="Footer with serial number and date" checked={draft.footer} onChange={(footer) => set({ footer })} />
             <p className="t-small text-text-muted">Labels under 1.5 in tall show the frame only.</p>
           </div>
@@ -79,6 +86,8 @@ export function LabelStyleTab() {
           </div>
         </div>
       </Card>
+      <CompanyCard />
+      <QrCard />
       <div className="flex flex-col gap-3">
         <span className="t-caption text-text-muted uppercase">Every label type with this style</span>
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
@@ -111,5 +120,94 @@ function FamilyPreview({ type, partId, style }: { type: LabelType; partId: strin
         {type.name} · {type.size.name}
       </figcaption>
     </figure>
+  );
+}
+
+/** The company name printed in the title band (the same setting as Settings → General). */
+function CompanyCard() {
+  const qc = useQueryClient();
+  const settings = useSettings();
+  const [name, setName] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  useEffect(() => setName(settings.data?.company_name ?? ""), [settings.data?.company_name]);
+  const save = useSaveSettings(setErrors);
+  return (
+    <Card className="w-full max-w-[720px]">
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate({ company_name: name.trim() }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ["preview"] }) });
+        }}
+      >
+        <Field label="Company name on the label" htmlFor="ls-company" error={errors.company_name} helper="Printed in the title band, in capitals.">
+          <Input id="ls-company" maxLength={120} value={name} error={errors.company_name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <div>
+          <Button type="submit" loading={save.isPending} disabled={!name.trim() || name.trim() === settings.data?.company_name}>
+            Save
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+/** What a label's QR code does when someone scans it. */
+function QrCard() {
+  const settings = useSettings();
+  const qr = settings.data?.qr;
+  const [base, setBase] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  useEffect(() => setBase(qr?.link_base ?? ""), [qr?.link_base]);
+  const save = useSaveSettings(setErrors);
+  if (!qr) return null;
+  const localhost = /\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(qr.link_base);
+  return (
+    <Card className="w-full max-w-[720px]">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <span className="t-h3 text-text">QR codes</span>
+          <span className="t-small text-text-muted">Scanning a label with a phone opens the part's page: its details, picture and serial.</span>
+        </div>
+        <Switch label="QR codes open the part page" checked={qr.link} onChange={(link) => save.mutate({ qr_link: link })} />
+        {qr.link && (
+          <>
+            <form
+              className="flex flex-col gap-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                save.mutate({ qr_link_base: base });
+              }}
+            >
+              <Field
+                label="Address phones open"
+                htmlFor="qr-base"
+                error={errors.qr_link_base}
+                helper="This computer's address on your network (or your server's), e.g. https://192.168.1.20:8443."
+              >
+                <Input id="qr-base" maxLength={200} value={base} error={errors.qr_link_base} onChange={(e) => setBase(e.target.value)} />
+              </Field>
+              <div>
+                <Button type="submit" variant="secondary" loading={save.isPending} disabled={!base.trim() || base.trim() === qr.link_base}>
+                  Save address
+                </Button>
+              </div>
+            </form>
+            {localhost && (
+              <Banner tone="warning">"localhost" only works on this computer. Phones need this computer's network address instead.</Banner>
+            )}
+            <Checkbox
+              label="Anyone who scans can open it (no sign-in)"
+              checked={qr.scan_public}
+              onChange={(scan_public) => save.mutate({ scan_public })}
+            />
+            <p className="t-small text-text-muted">
+              Labels already printed keep the QR code they were printed with. Off: the QR code holds the part number as text.
+            </p>
+          </>
+        )}
+      </div>
+    </Card>
   );
 }

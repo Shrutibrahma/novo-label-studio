@@ -5,6 +5,7 @@ import { Button } from "../../components/Button";
 import { Input, SegmentedControl, Switch } from "../../components/Form";
 import { Tooltip } from "../../components/Tooltip";
 import { inches } from "../../lib/format";
+import { useSettings } from "../../lib/queries";
 import type { CustomField, LabelStyle, ManualField, SpecField } from "../../lib/parts";
 import type { LabelSize } from "../../lib/types";
 import { ManualFieldDialog } from "./ManualFieldDialog";
@@ -383,6 +384,7 @@ export function PictureSection({ draft, onChange }: { draft: Draft; onChange: (s
 
 /** Section "QR code & serial". */
 export function QrSection({ draft, onChange }: { draft: Draft; onChange: (patch: Partial<Draft>, style?: Partial<LabelStyle>) => void }) {
+  const qrLink = useSettings().data?.qr.link ?? false;
   const serialOn = draft.serial_mode === "required";
   return (
     <>
@@ -413,14 +415,16 @@ export function QrSection({ draft, onChange }: { draft: Draft; onChange: (patch:
             value={draft.spec.style.qr_content ?? "part_number"}
             onChange={(v) => onChange({}, { qr_content: v })}
             options={[
-              { value: "part_number", label: "Part number" },
+              { value: "part_number", label: qrLink ? "Link to part page" : "Part number" },
               { value: "label_data", label: "All label data" },
             ]}
           />
           <span className="t-caption text-text-muted">
             {(draft.spec.style.qr_content ?? "part_number") === "label_data"
               ? "Scanning shows every value on the label, one per line. Too much text makes the QR too small to print."
-              : "Scanning gives PN: and the part number."}
+              : qrLink
+                ? "Scanning opens the part's page on a phone: details, picture and serial. Change it in Settings → Label style."
+                : "Scanning gives PN: and the part number."}
           </span>
         </div>
       )}

@@ -71,6 +71,14 @@ export interface AppSettings {
   serial: SerialSettings;
   fonts_allowed: string[];
   backup: BackupStatus;
+  qr: QrSettings;
+}
+
+/** QR codes open the part page: on/off, the address phones open, and whether a sign-in is needed. */
+export interface QrSettings {
+  link: boolean;
+  link_base: string;
+  scan_public: boolean;
 }
 
 /** The last backup and its copy off this machine (v1.1 D25). */
@@ -88,4 +96,6 @@ export interface HouseStyle {
   title_band: boolean;
   company_in_band: boolean;
   footer: boolean;
+  /** The label type's name (LABEL, KANBAN) in the band. Off: only the company name. */
+  title_in_band: boolean;
 }

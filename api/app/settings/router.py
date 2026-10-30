@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from urllib.parse import urlsplit
 from typing import Any, Literal
 
 from fastapi import APIRouter
@@ -13,7 +14,8 @@ from sqlalchemy import exists, select
 from app.audit import audit
 from app.auth.deps import DB, Admin, AnyUser
 from app.config import get_settings
-from app.configs.defaults import ALL_FONTS, SETTING_COMPANY, SETTING_FONTS, SETTING_HOUSE_STYLE
+from app.configs.defaults import (ALL_FONTS, SETTING_COMPANY, SETTING_FONTS, SETTING_HOUSE_STYLE, SETTING_QR_LINK,
+                                  SETTING_QR_LINK_BASE, SETTING_SCAN_PUBLIC)
 from app.errors import ApiError, field_error
 from app.models import AppSetting, IssuedSerial, SerialSequence
 from app.render.house import HouseStyle
@@ -41,11 +43,20 @@ class BackupStatus(BaseModel):
     copy_error: str | None
 
 
+class QrSettings(BaseModel):
+    """QR codes open the part page: on/off, the address phones open, and whether it needs a sign-in."""
+
+    link: bool
+    link_base: str
+    scan_public: bool
+
+
 class SettingsOut(BaseModel):
     company_name: str
     serial: SerialSettings
     fonts_allowed: list[str]
     backup: BackupStatus
+    qr: QrSettings
 
 
 class SettingsPatch(BaseModel):
@@ -54,6 +65,9 @@ class SettingsPatch(BaseModel):
     serial_separator: Literal["", "-", "_"] | None = None
     serial_digits: int | None = Field(default=None, ge=4, le=12)
     serial_next_value: int | None = Field(default=None, ge=1)
+    qr_link: bool | None = None
+    qr_link_base: str | None = Field(default=None, max_length=200)
+    scan_public: bool | None = None
 
 
 def format_serial(prefix: str, separator: str, digits: int, value: int) -> str:
@@ -88,7 +102,36 @@ async def settings_out(db: DB) -> SettingsOut:
                               example=format_serial(seq.prefix, seq.separator, seq.digits, seq.next_value)),
         fonts_allowed=list(await get_setting(db, SETTING_FONTS, ALL_FONTS)),
         backup=backup_status(),
+        qr=await qr_settings(db),
     )
+
+
+async def qr_settings(db: DB) -> QrSettings:
+    base = str(await get_setting(db, SETTING_QR_LINK_BASE, "") or get_settings().public_base_url)
+    return QrSettings(link=bool(await get_setting(db, SETTING_QR_LINK, True)), link_base=base.rstrip("/"),
+                      scan_public=bool(await get_setting(db, SETTING_SCAN_PUBLIC, False)))
+
+
+def clean_link_base(raw: str) -> str:
+    base = raw.strip().rstrip("/")
+    parsed = urlsplit(base)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.query or parsed.fragment:
+        raise ApiError("QR_LINK_INVALID", fields={"qr_link_base": "Use the address phones open, for example "
+                                                                 "https://192.168.1.20:8443."})
+    return base
+
+
+async def put_setting(db: DB, key: str, value: Any, user_id: Any) -> None:
+    row = await db.get(AppSetting, key)
+    before = row.value if row is not None else None
+    if before == value:
+        return
+    if row is None:
+        db.add(AppSetting(key=key, value=value, updated_by=user_id))
+    else:
+        row.value = value
+        row.updated_by = user_id
+    audit(db, user_id, "setting.update", "app_setting", key, {"value": before}, {"value": value})
 
 
 def backup_status() -> BackupStatus:
@@ -118,6 +161,13 @@ async def patch_settings(body: SettingsPatch, user: Admin, db: DB) -> SettingsOu
         else:
             row.value = body.company_name.strip()
             row.updated_by = user.id
+
+    if body.qr_link is not None:
+        await put_setting(db, SETTING_QR_LINK, body.qr_link, user.id)
+    if body.qr_link_base is not None:
+        await put_setting(db, SETTING_QR_LINK_BASE, clean_link_base(body.qr_link_base), user.id)
+    if body.scan_public is not None:
+        await put_setting(db, SETTING_SCAN_PUBLIC, body.scan_public, user.id)
 
     format_change = any(v is not None for v in (body.serial_prefix, body.serial_separator, body.serial_digits))
     if format_change or body.serial_next_value is not None:

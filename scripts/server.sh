@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs Novo Smart Labels on an internet-facing Linux server (Ubuntu, e.g. an Oracle Cloud Always Free VM),
-# with a free Let's Encrypt certificate from Caddy. See deploy/ORACLE.md for the full walkthrough.
+# Runs Novo Smart Labels on an internet-facing Linux server (Ubuntu: Hetzner Cloud, Oracle Cloud Always Free, ...),
+# with a free Let's Encrypt certificate from Caddy. See deploy/HETZNER.md or deploy/ORACLE.md for the full walkthrough.
 #   bash scripts/server.sh setup                    install Docker and open ports 80/443 in the VM firewall (once)
 #   bash scripts/server.sh up [domain]              build + start everything, wait until healthy, print the URL
 #   bash scripts/server.sh down                     stop everything (data is kept)
@@ -9,6 +9,7 @@
 #   bash scripts/server.sh backup                   take a backup now (into backups/)
 #   bash scripts/server.sh demo                     load the demo parts
 #   bash scripts/server.sh reset-password <user>    set a new password for a user (asked twice, hidden)
+#   bash scripts/server.sh restore [stamp]          replace all data with a backup in backups/ (newest by default)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -99,7 +100,7 @@ cmd_up() {
     until [ "$(curl -s -o /dev/null -w '%{http_code}' "https://$domain/api/v1/health" || true)" = "200" ]; do
         if [ $SECONDS -ge $deadline ]; then
             compose ps
-            fail "https://$domain didn't answer in time. Check that the domain points at this server, that ports 80 and 443 are open in the Oracle security list, and the logs:  bash scripts/server.sh logs caddy"
+            fail "https://$domain didn't answer in time. Check that the domain points at this server, that ports 80 and 443 are open in the cloud firewall (Hetzner firewall / Oracle security list), and the logs:  bash scripts/server.sh logs caddy"
         fi
         sleep 3
     done
@@ -117,6 +118,32 @@ cmd_reset_password() {
     printf '%s\n' "$first" | compose exec -T api python -m app.reset_password "$user"
 }
 
+cmd_restore() {
+    # Same steps as scripts/restore.ps1: used to move the laptop's data here (copy label-*.dump and
+    # assets-*.tar.gz into backups/ first) or to roll back.
+    local backups="$REPO_ROOT/backups" stamp="${1:-}"
+    if [ -z "$stamp" ]; then
+        local latest; latest="$(ls "$backups"/label-*.dump 2>/dev/null | sort | tail -n1 || true)"
+        [ -n "$latest" ] || fail "No backups found in $backups."
+        stamp="$(basename "$latest" .dump)"; stamp="${stamp#label-}"
+    fi
+    [ -f "$backups/label-$stamp.dump" ] || fail "Missing $backups/label-$stamp.dump"
+    [ -f "$backups/assets-$stamp.tar.gz" ] || fail "Missing $backups/assets-$stamp.tar.gz"
+    echo "This replaces ALL current data with the backup from $stamp."
+    local answer; read -r -p "Type RESTORE to continue: " answer
+    [ "$answer" = "RESTORE" ] || { echo "Cancelled. Nothing was changed."; exit 0; }
+
+    echo "Stopping the API and web..."
+    compose stop api web caddy
+    compose up -d db
+    echo "Restoring the database from label-$stamp.dump..."
+    compose run --rm --no-deps -e "STAMP=$stamp" --entrypoint sh backup -c         'PGPASSWORD="$DB_PASSWORD" pg_restore -h db -U label -d label --clean --if-exists --no-owner --exit-on-error "/backups/label-$STAMP.dump"'
+    echo "Restoring part images from assets-$stamp.tar.gz..."
+    compose run --rm --no-deps -e "STAMP=$stamp" --user root --entrypoint sh backup -c         'find /data/assets -mindepth 1 -delete; tar -xzf "/backups/assets-$STAMP.tar.gz" -C /data && chown -R 10001 /data/assets'
+    echo "Starting the app..."
+    cmd_up
+}
+
 command="${1:-}"; shift || true
 case "$command" in
     setup) cmd_setup ;;
@@ -128,5 +155,6 @@ case "$command" in
     backup) compose run --rm backup once ;;
     demo) compose exec -T api python -m app.demo ;;
     reset-password) cmd_reset_password "$@" ;;
-    *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+    restore) cmd_restore "$@" ;;
+    *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

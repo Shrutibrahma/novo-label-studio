@@ -182,6 +182,7 @@ this machine: Yes / No — {error}". Restore from that folder with `.\scripts\re
 Run it on the plant network — this laptop or a small server — and reach it by name from other PCs: add
 `EXTRA_SAN=DNS:labels.local` (or `IP:192.168.x.y`) to `deploy\.env` before the first start, or delete
 `deploy\certs\` to regenerate the certificate. Nothing needs to be reachable from the internet.
+For a Linux server in the office (e.g. a spare OptiPlex), follow `deploy/LAN.md`.
 
 If it must be on the internet (the Oracle Cloud setup in `deploy/ORACLE.md`), set `ALLOWED_CIDRS` in
 `deploy/.env` to the plant's public address range(s), comma-separated (e.g. `203.0.113.0/24, 198.51.100.7/32`):

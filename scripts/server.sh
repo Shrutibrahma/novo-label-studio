@@ -3,7 +3,7 @@
 # with a free Let's Encrypt certificate from Caddy. See deploy/HETZNER.md or deploy/ORACLE.md for the full walkthrough.
 #   bash scripts/server.sh setup                    install Docker and open ports 80/443 in the VM firewall (once)
 #   bash scripts/server.sh up [domain]              build + start everything, wait until healthy, print the URL
-#   bash scripts/server.sh lan [ip]                 office-network server instead (deploy/LAN.md): https://<ip>:8443
+#   bash scripts/server.sh lan [ip] [name]          office-network server instead (deploy/LAN.md): https://<ip>:8443
 #   bash scripts/server.sh down                     stop everything (data is kept)
 #   bash scripts/server.sh update                   git pull, then up
 #   bash scripts/server.sh status | logs [service]  what's running / follow the logs
@@ -124,24 +124,30 @@ cmd_lan() {
     local ip="${1:-$(env_value LAN_IP)}"
     [ -n "$ip" ] || ip="$(hostname -I | awk '{print $1}')"
     [ -n "$ip" ] || fail "Couldn't find this machine's IP address. Run: bash scripts/server.sh lan <ip>"
+    # Optional name from the office DNS (e.g. labels.example.com): the certificate covers it and links use it.
+    local name="${2:-$(env_value LAN_NAME)}"
     local port; port="$(env_value HTTPS_PORT)"; port="${port:-8443}"
+    local host="${name:-$ip}" suffix=":$port" san="IP:$ip"
+    [ "$port" != "443" ] || suffix=""
+    if [ -n "$name" ]; then san="$san,DNS:$name"; fi
     set_env_value MODE lan
     set_env_value LAN_IP "$ip"
-    set_env_value EXTRA_SAN "IP:$ip"
-    set_env_value PUBLIC_BASE_URL "https://$ip:$port"
+    set_env_value LAN_NAME "$name"
+    set_env_value EXTRA_SAN "$san"
+    set_env_value PUBLIC_BASE_URL "https://$host$suffix"
     set_env_value BACKUP_TZ "$(timedatectl show -p Timezone --value 2>/dev/null || echo UTC)"
 
-    # The certificate only covers the address it was made for: after an IP change, make a new one.
+    # The certificate only covers the addresses it was made for: after an IP or name change, make a new one.
     local cert="$DEPLOY_DIR/certs/labelstudio.crt"
-    if [ -f "$cert" ] && ! openssl x509 -in "$cert" -noout -text | grep -qE "IP Address:${ip//./\\.}(,|$)"; then
-        echo "The certificate doesn't cover $ip; making a new one (copy it to the print agent PC again)."
+    if [ -f "$cert" ] && ! cert_covers "$cert" "$ip" "$name"; then
+        echo "The certificate doesn't cover $host; making a new one (copy it to the print agent PC again)."
         sudo rm -f "$cert" "$DEPLOY_DIR/certs/labelstudio.key"
     fi
 
     echo "Building and starting Novo Smart Labels (db, api, web, backup) for the office network..."
     compose up -d --build --remove-orphans
 
-    echo "Waiting for the app to come up at https://$ip:$port..."
+    echo "Waiting for the app to come up at https://$host$suffix..."
     local deadline=$((SECONDS + 300))
     until [ "$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:$port/api/v1/health" || true)" = "200" ]; do
         if [ $SECONDS -ge $deadline ]; then
@@ -151,9 +157,17 @@ cmd_lan() {
         sleep 3
     done
     echo
-    echo "Novo Smart Labels is running at https://$ip:$port"
+    echo "Novo Smart Labels is running at https://$host$suffix"
+    if [ -n "$name" ]; then echo "(also https://$ip$suffix, until the office DNS knows $name)"; fi
     echo "The certificate is self-signed: each browser asks to accept it once. The print agent PC needs a copy of"
     echo "  $cert"
+}
+
+# True when the certificate lists the IP and, if given, the name.
+cert_covers() {
+    local text; text="$(openssl x509 -in "$1" -noout -text)"
+    grep -qE "IP Address:${2//./\\.}(,|$)" <<<"$text" || return 1
+    [ -z "$3" ] || grep -qE "DNS:${3//./\\.}(,|$)" <<<"$text"
 }
 
 # Starts the app the way it was set up: LAN mode once 'lan' has been run, the internet server otherwise.

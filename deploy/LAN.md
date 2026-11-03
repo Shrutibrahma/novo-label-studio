@@ -89,6 +89,20 @@ Stop the laptop's own copy afterwards (`.\scripts\down.ps1`) so nobody prints to
 Settings → Label style → QR codes → turn on **QR codes open the part page** and set the address to
 `https://<server-ip>:8443`. Phones on the plant Wi-Fi can then scan a label and see the part.
 
+## A name instead of the IP, without the port number
+
+Ask IT to add a record on the office DNS server pointing the name at the server, e.g.
+`labels.novoprecision.com → 192.168.1.50`. Then, on the server:
+
+```bash
+echo "HTTPS_PORT=443" >> deploy/.env
+bash scripts/server.sh lan 192.168.1.50 labels.novoprecision.com
+```
+
+The app is then at `https://labels.novoprecision.com` (port 443 needs no number in the address), and the IP
+address keeps working. It makes a new certificate covering both: repeat step 4, run the agent once with
+`-ApiBaseUrl https://labels.novoprecision.com/api`, and update the QR-code address in step 6.
+
 ## If the server's IP changes
 
 ```bash

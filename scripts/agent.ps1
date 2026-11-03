@@ -4,6 +4,8 @@
 #   scripts/agent.ps1 -Mode usb -Queue ARKSCAN -Language epl   an ARKSCAN 2054A (Seagull "Zebra LP2844" driver)
 #   scripts/agent.ps1 -Token <token>           the agent token from setup / Settings -> Printers (saved for next time)
 #   scripts/agent.ps1 -ApiBaseUrl https://<server>/api   use a hosted server instead of this laptop (saved too)
+#   scripts/agent.ps1 -ApiBaseUrl https://<ip>:8443/api -CaBundle <copy of its labelstudio.crt>   an office-network
+#                                              server with a self-signed certificate (deploy/LAN.md; saved too)
 # Force the simulated printer's status from another window:  scripts/agent.ps1 -SimStatus out_of_media
 param(
     [ValidateSet('simulated', 'usb')][string]$Mode = 'simulated',
@@ -11,6 +13,7 @@ param(
     [ValidateSet('zpl', 'epl')][string]$Language = 'zpl',
     [string]$Token,
     [string]$ApiBaseUrl,
+    [string]$CaBundle,
     [string]$Queue = 'ZQ630 Plus',
     [ValidateSet('', 'ready', 'offline', 'out_of_media', 'head_open', 'paused', 'error')][string]$SimStatus = '',
     [switch]$HsReadback
@@ -30,13 +33,18 @@ if ($SimStatus) {
 $saved = @{}
 if (Test-Path $agentEnv) {
     foreach ($line in Get-Content $agentEnv) {
-        if ($line -match '^\s*(AGENT_TOKEN|API_BASE_URL)=(.+)$') { $saved[$Matches[1]] = $Matches[2].Trim() }
+        if ($line -match '^\s*(AGENT_TOKEN|API_BASE_URL|AGENT_CA_BUNDLE)=(.+)$') { $saved[$Matches[1]] = $Matches[2].Trim() }
     }
 }
-if ($Token -or $ApiBaseUrl) {
+if ($CaBundle) {
+    if (-not (Test-Path $CaBundle)) { Fail "Certificate not found: $CaBundle" }
+    $CaBundle = (Resolve-Path $CaBundle).Path
+}
+if ($Token -or $ApiBaseUrl -or $CaBundle) {
     # Remember the token and a hosted server's address (e.g. -ApiBaseUrl https://labels.example.com/api).
     if ($Token) { $saved['AGENT_TOKEN'] = $Token }
     if ($ApiBaseUrl) { $saved['API_BASE_URL'] = $ApiBaseUrl }
+    if ($CaBundle) { $saved['AGENT_CA_BUNDLE'] = $CaBundle }
     $content = ($saved.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)`n" }) -join ''
     [System.IO.File]::WriteAllText($agentEnv, $content, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "Saved the agent settings to agent/.env."
@@ -61,6 +69,9 @@ if (-not $env:AGENT_POLL_SECONDS) { $env:AGENT_POLL_SECONDS = '1' }
 # The self-signed certificate only applies to the local server; a hosted one has a normal public certificate.
 $isLocal = ([Uri]$ApiBaseUrl).Host -in @('localhost', '127.0.0.1', 'labels.local')
 if ($isLocal -and (Test-Path $cert)) { $env:AGENT_CA_BUNDLE = $cert }
+# An office-network server's self-signed certificate, copied to this PC (deploy/LAN.md).
+if (-not $CaBundle -and -not $env:AGENT_CA_BUNDLE) { $CaBundle = $saved['AGENT_CA_BUNDLE'] }
+if ($CaBundle) { $env:AGENT_CA_BUNDLE = $CaBundle }
 if ($HsReadback) { $env:AGENT_HS_READBACK = '1' }  # [SPIKE] ~HS status readback over USB
 
 Write-Host "Starting the print agent ($Mode, $Language) against $ApiBaseUrl. Press Ctrl+C to stop."

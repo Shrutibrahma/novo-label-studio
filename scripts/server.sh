@@ -3,6 +3,7 @@
 # with a free Let's Encrypt certificate from Caddy. See deploy/HETZNER.md or deploy/ORACLE.md for the full walkthrough.
 #   bash scripts/server.sh setup                    install Docker and open ports 80/443 in the VM firewall (once)
 #   bash scripts/server.sh up [domain]              build + start everything, wait until healthy, print the URL
+#   bash scripts/server.sh lan [ip]                 office-network server instead (deploy/LAN.md): https://<ip>:8443
 #   bash scripts/server.sh down                     stop everything (data is kept)
 #   bash scripts/server.sh update                   git pull, then up
 #   bash scripts/server.sh status | logs [service]  what's running / follow the logs
@@ -24,11 +25,14 @@ docker_cmd() {
 }
 
 compose() {
-    docker_cmd compose --project-directory "$DEPLOY_DIR" \
-        -f "$DEPLOY_DIR/docker-compose.yml" -f "$DEPLOY_DIR/docker-compose.server.yml" "$@"
+    # LAN mode has no Caddy: the web container's own HTTPS port faces the office network.
+    local files=(-f "$DEPLOY_DIR/docker-compose.yml")
+    [ "$(env_value MODE)" = "lan" ] || files+=(-f "$DEPLOY_DIR/docker-compose.server.yml")
+    docker_cmd compose --project-directory "$DEPLOY_DIR" "${files[@]}" "$@"
 }
 
-env_value() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2-; }
+# Empty (not an error) when the setting or the file is missing: set -e would otherwise stop the script.
+env_value() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- || true; }
 
 set_env_value() {
     if grep -qE "^$1=" "$ENV_FILE"; then
@@ -60,8 +64,7 @@ cmd_setup() {
     echo "Setup done. Next:  bash scripts/server.sh up"
 }
 
-init_env() {
-    local domain="${1:-}"
+create_env_file() {
     if [ ! -f "$ENV_FILE" ]; then
         cat > "$ENV_FILE" <<EOF
 DB_PASSWORD=$(openssl rand -hex 24)
@@ -71,6 +74,11 @@ EOF
         chmod 600 "$ENV_FILE"
         echo "Created deploy/.env with a random database password."
     fi
+}
+
+init_env() {
+    local domain="${1:-}"
+    create_env_file
     [ -n "$domain" ] || domain="$(env_value SITE_DOMAIN)"
     if [ -z "$domain" ]; then
         local ip suggestion
@@ -108,6 +116,51 @@ cmd_up() {
     echo "Novo Smart Labels is running at https://$domain"
 }
 
+cmd_lan() {
+    # A server on the office network (e.g. a spare PC): no domain or internet access needed. The web container
+    # serves HTTPS itself with the self-signed certificate it makes on first start for this machine's IP.
+    command -v docker >/dev/null || fail "Docker isn't installed. Run: bash scripts/server.sh setup"
+    create_env_file
+    local ip="${1:-$(env_value LAN_IP)}"
+    [ -n "$ip" ] || ip="$(hostname -I | awk '{print $1}')"
+    [ -n "$ip" ] || fail "Couldn't find this machine's IP address. Run: bash scripts/server.sh lan <ip>"
+    local port; port="$(env_value HTTPS_PORT)"; port="${port:-8443}"
+    set_env_value MODE lan
+    set_env_value LAN_IP "$ip"
+    set_env_value EXTRA_SAN "IP:$ip"
+    set_env_value PUBLIC_BASE_URL "https://$ip:$port"
+    set_env_value BACKUP_TZ "$(timedatectl show -p Timezone --value 2>/dev/null || echo UTC)"
+
+    # The certificate only covers the address it was made for: after an IP change, make a new one.
+    local cert="$DEPLOY_DIR/certs/labelstudio.crt"
+    if [ -f "$cert" ] && ! openssl x509 -in "$cert" -noout -text | grep -qE "IP Address:${ip//./\\.}(,|$)"; then
+        echo "The certificate doesn't cover $ip; making a new one (copy it to the print agent PC again)."
+        sudo rm -f "$cert" "$DEPLOY_DIR/certs/labelstudio.key"
+    fi
+
+    echo "Building and starting Novo Smart Labels (db, api, web, backup) for the office network..."
+    compose up -d --build --remove-orphans
+
+    echo "Waiting for the app to come up at https://$ip:$port..."
+    local deadline=$((SECONDS + 300))
+    until [ "$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:$port/api/v1/health" || true)" = "200" ]; do
+        if [ $SECONDS -ge $deadline ]; then
+            compose ps
+            fail "The app didn't come up in time. Check the logs:  bash scripts/server.sh logs api"
+        fi
+        sleep 3
+    done
+    echo
+    echo "Novo Smart Labels is running at https://$ip:$port"
+    echo "The certificate is self-signed: each browser asks to accept it once. The print agent PC needs a copy of"
+    echo "  $cert"
+}
+
+# Starts the app the way it was set up: LAN mode once 'lan' has been run, the internet server otherwise.
+start_app() {
+    if [ "$(env_value MODE)" = "lan" ]; then cmd_lan "$@"; else cmd_up "$@"; fi
+}
+
 cmd_reset_password() {
     local user="${1:-}"
     [ -n "$user" ] || fail "Usage: bash scripts/server.sh reset-password <username>"
@@ -141,15 +194,16 @@ cmd_restore() {
     echo "Restoring part images from assets-$stamp.tar.gz..."
     compose run --rm --no-deps -e "STAMP=$stamp" --user root --entrypoint sh backup -c         'find /data/assets -mindepth 1 -delete; tar -xzf "/backups/assets-$STAMP.tar.gz" -C /data && chown -R 10001 /data/assets'
     echo "Starting the app..."
-    cmd_up
+    start_app
 }
 
 command="${1:-}"; shift || true
 case "$command" in
     setup) cmd_setup ;;
-    up) cmd_up "$@" ;;
+    up) start_app "$@" ;;
+    lan) cmd_lan "$@" ;;
     down) compose down ;;
-    update) git -C "$REPO_ROOT" pull --ff-only && cmd_up ;;
+    update) git -C "$REPO_ROOT" pull --ff-only && start_app ;;
     status) compose ps ;;
     logs) compose logs -f --tail 100 "$@" ;;
     backup) compose run --rm backup once ;;
